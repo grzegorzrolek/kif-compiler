@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<!DOCTYPE postTable [
+<!ELEMENT postTable (PostScriptName+)>
+<!ELEMENT PostScriptName EMPTY>
+<!ATTLIST postTable versionMajor CDATA #REQUIRED
+	versionMinor CDATA #REQUIRED
+	italicAngle CDATA #REQUIRED
+	underlinePosition CDATA #REQUIRED
+	underlineThickness CDATA #REQUIRED
+	isFixedPitch CDATA #REQUIRED
+	minMemType42 CDATA #REQUIRED
+	maxMemType42 CDATA #REQUIRED
+	minMemType1 CDATA #REQUIRED
+	maxMemType1 CDATA #REQUIRED
+>
+<!ATTLIST PostScriptName glyphRefID CDATA #REQUIRED
+	PostScriptIndex CDATA #IMPLIED
+	NameString CDATA #REQUIRED
+>
+]>
+
+<!--
+
+	Example of a glyph name listing as dumped by OS X Font Tools
+	Copyright 2013 Grzegorz Rolek
+
+	Exact syntax as defined in ftxdumperfuser build 248
+	FontToolbox.framework build 55
+
+-->
+
+<postTable  versionMajor="2"
+	versionMinor="0"
+	italicAngle="0.0"
+	underlinePosition="0"
+	underlineThickness="0"
+	isFixedPitch="0"
+	minMemType42="0"
+	maxMemType42="0"
+	minMemType1="0"
+	maxMemType1="0"
+	>
+		<PostScriptName glyphRefID="0" NameString=".notdef" />
+		<PostScriptName glyphRefID="1" NameString="apostrophe" />
+		<PostScriptName glyphRefID="2" NameString="A" />
+		<PostScriptName glyphRefID="3" NameString="Aacute" />
+		<PostScriptName glyphRefID="4" NameString="Agrave" />
+		<PostScriptName glyphRefID="5" NameString="L" />
+</postTable>
+

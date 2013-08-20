@@ -1,0 +1,47 @@
+// Example of a Kerning Input File as read by the compiler
+// Copyright 2013 Grzegorz Rolek
+//
+// This sample file deals with an elision of L'Amore or similar phrase,
+// where an apostrophe, normally kerned into 'L', is followed by an 'A',
+// in which case it needs to be moved away so as not to touch the L's
+// arm, and then the apostrophe itself balanced between the two letters.
+
+// Kerning Input File format has never been publicly released by Apple,
+// so this file approximates the syntax based on the Morph Input File.
+// Subtable header is modified to meet the kerning table specification:
+
+Type Contextual // the only type supported for now
+Orientation H // (H)orizontal or (V)ertical
+Cross-stream no // optional; defaults to 'no'
+Variation no // optional; defaults to 'no'
+
+// Class listing and the state table follow the MIF syntax literally:
+
+L       L
+Aps     apostrophe
+A       A Aacute Agrave
+
+            EOT OOB DEL EOL L   Aps A
+StartText   1   1   1   1   2   1   1
+StartLine   1   1   1   1   2   1   1
+L           1   1   2   1   2   3   1
+Elision     1   1   4   1   1   1   5
+
+// Entry table swaps the mark flag for a push flag, which pushes current
+// glyph onto the kern stack, and indicates kern values to apply:
+
+    GoTo            Push?   Advance?    KernValues
+1   StartText       no      yes         none
+2   L               no      yes         none
+3   Elision         yes     yes         LElision
+4   Elision         no      yes         none
+5   StartText       yes     yes         LtoAElision
+
+// Each list of values is applied to the kern stack by popping glyphs
+// from the stack one by one until the last value is consumed (multiple
+// values applied to one particular glyph on a stack are additive):
+
+LElision -60 // kerns the foremost glyph from the current stack
+LtoAElision 40 20 // first the most, then the second most recent glyph
+
+// More subtables are defined in sequence, the way it's done with a MIF.

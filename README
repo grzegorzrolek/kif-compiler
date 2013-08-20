@@ -1,0 +1,77 @@
+KERNING INPUT FILE COMPILER
+
+This is a pretty raw compiler for the Kerning Input File, a text file to
+kern fonts in TrueType AAT. Its output is a hex code for the state
+machine kerning table that you fuse into a font with OS X Font Tools.
+
+
+REQUIREMENTS & USAGE
+
+You'll need a dump of your font's 'post' table first. It will be used to
+lookup the glyph names, so the table has to be in a format that actually
+lists those. Produce the dump with OS X Font Tools by running:
+
+ftxdumperfuser --table post --output post.xml font.ttf
+
+Having both the 'post' dump and your kerning file in place, simply run:
+
+kif.sh post.xml kern.kif >kern.xml
+
+That will make a file full of hex code for your kerning table, that can
+be now fused into the font, again with the Font Tools:
+
+ftxdumperfuser --table kern --generic --datafile kern.xml font.ttf
+
+Hex code in the kern data file is nicely formatted and commented, what
+can be of much help in case something goes wrong in the process.
+
+
+THE KIF FILE FORMAT
+
+Kerning Input File, although it once had a mention in Font Tools docs,
+hasn't apparently been published by Apple. Here is a reconstruction
+of the format based on Morph Input File, a related format still in use.
+
+Parts common to all AAT state machines, i.e., the class listing and the
+state table, follow the MIF syntax literally; the rest is modified to
+handle the specifics of the kerning table as follows.
+
+Subtable header is shortened to Type and Orientation, both required
+fields. These are supplemented with two additional ones, Cross-stream
+and Variation, both of a yes/no value that default to 'no':
+
+Type Contextual
+Orientation H/V
+Cross-stream yes/no
+Variation yes/no
+
+Entry table swaps the Mark flag for a Push flag, which pushes current
+glyph onto the kern stack. It also has a single action, KernValues, that
+gives the name of a list of kern values to apply on the stack:
+
+    GoTo        Push?   Advance?    KernValues
+1   StateName   yes/no  yes/no      ListName/none
+2   ...
+
+Numeric kern values follow, each list on a separate line with the list's
+name in front. Each value is applied to the kern stack in order of
+popping the stack glyph by glyph until the list is consumed:
+
+ListName KernValue KernValue ...
+
+This concludes a subtable. Please see the accompanying example directory
+for a working example and more commentary.
+
+
+LIMITATIONS
+
+For now, only contextual kerning subtables are available. Moreover, the
+recently found 'kerx' extended kerning table is not fully documented,
+so it makes it an old 'kern' table also. Still, the old one works well
+in CoreText on both OS X and iOS, so this shouldn't be an issue.
+
+
+COPYRIGHT & LICENSE NOTICE
+
+This work is copyrighted by Grzegorz Rolek, 2013, and is subject to the
+BSD 3-Clause License. Please see LICENSE for details.
