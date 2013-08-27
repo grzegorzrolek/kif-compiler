@@ -124,14 +124,23 @@ do
 		done
 	fi
 
+	unset line
 	let nclasses=4 # four built-in classes
 	while true
 	do
 		# Skip blanks, but break on a state table header (an indent).
 		test "$REPLY" || { read; continue; }
-		grep -q '^[a-zA-Z]' <<<"$REPLY" || break
+		grep -q '^[a-zA-Z+]' <<<"$REPLY" || break
 
-		line=($REPLY)
+		line=(${line[@]} ${linecont[@]-$REPLY})
+		read
+		if grep -q '^\+' <<<"$REPLY"
+		then
+			linetmp=($REPLY)
+			linecont=(${linetmp[@]:1})
+			continue
+		fi
+
 		clnames[${#clnames[@]}]=$line
 
 		for glyph in ${line[@]:1}
@@ -145,7 +154,7 @@ do
 		done
 
 		let nclasses++
-		read
+		unset line linecont
 	done
 
 	# Set an Out-of-Bounds class on glyphs inbetween the specified ones.
