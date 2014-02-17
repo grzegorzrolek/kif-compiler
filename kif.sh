@@ -51,7 +51,9 @@ printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 until test $eof
 do
 
-	tabfmt=0 # Subtable's coverage flags and format
+	vertical='no'
+	crossstream='no'
+	variation='no'
 	classes=() # GID-indexed array of classes
 	clnames=(EOT OOB DEL EOL) # Class names
 	unset glstart # First glyph assigned to a class
@@ -60,6 +62,8 @@ do
 	stnames=() # State names
 	gotos=() # Next states
 	gtnames=() # Names of the next states
+	flpush=() # Flags for the push action
+	fladvance=() # Flags for the advance action
 	actions=() # Kern value lists to apply
 	actnames=() # Names of kern value lists to apply
 	values=() # Kerning values
@@ -85,7 +89,7 @@ do
 	test $line != "Orientation" &&
 		err "fatal: kerning orientation expected"
 	case ${line[@]:1} in
-		V) let tabfmt+=16#8000;;
+		V) vertical='yes';;
 		H) ;;
 		*) err "fatal: bad orientation flag: ${line[@]:1}";;
 	esac
@@ -98,7 +102,7 @@ do
 	if test $line = "Cross-stream"
 	then
 		case ${line[@]:1} in
-			yes) let tabfmt+=16#4000;;
+			yes) crossstream='yes';;
 			no) ;;
 			*) err "fatal: bad cross-stream flag: ${line[@]:1}";;
 		esac
@@ -113,7 +117,7 @@ do
 	if test $line = "Variation"
 	then
 		case ${line[@]:1} in
-			yes) let tabfmt+=16#2000;;
+			yes) variation='yes';;
 			no) ;;
 			*) err "fatal: bad variation flag: ${line[@]:1}";;
 		esac
@@ -162,11 +166,6 @@ do
 	do test "${classes[$i]}" || classes[$i]=1
 	done
 
-	let nmappings=$glend-$glstart+1
-	let clpad=$nmappings%2
-	let cloff=10 # constant
-	let stoff=$cloff+4+$nmappings+$clpad # 4 for the glyph range
-
 	# Check if the class list and state table header match.
 	header=($REPLY)
 	test "${clnames[*]}" != "${header[*]}" &&
@@ -201,10 +200,6 @@ do
 		read
 	done
 
-	nstates=${#states[@]}
-	let stpad=$nstates*$nclasses%2
-	let etoff=$stoff+$nstates*$nclasses+$stpad
-
 	# Skip any more blanks if necessary.
 	until test "$REPLY"
 	do read
@@ -235,20 +230,15 @@ do
 		indexof $stname ${stnames[@]}
 		test $index -eq -1 &&
 			err "fatal: state not found: $stname"
-		let goto=$stoff+$index*$nclasses
-		gotos=(${gotos[@]} $goto)
+		gotos=(${gotos[@]} $index)
 		gtnames=(${gtnames[@]} $stname)
 
-		action=0
-		test ${line[@]:2:1} = 'yes' && let action+=16#8000 # Push?
-		test ${line[@]:3:1} = 'yes' || let action+=16#4000 # Advance?
-		actions=(${actions[@]} $action)
+		flpush=(${flpush[@]} ${line[@]:2:1})
+		fladvance=(${fladvance[@]} ${line[@]:3:1})
 		actnames=(${actnames[@]} ${line[@]:4:1})
 
 		read
 	done
-
-	let vloff=$etoff+${#gotos[@]}*4
 
 	while true
 	do
@@ -260,48 +250,48 @@ do
 		line=($REPLY)
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
-
-		for value in ${line[@]:1}
-		do
-			# Make a 2's complement for a negative value.
-			test $value -lt 0 && let value=16#10000+$value
-
-			# Unset the least significant bit for each value.
-			let value-=$value%2
-
-			values=(${values[@]} $value)
-		done
-
-		# Set the list-end flag for the last value.
-		values[(( ${#values[@]}-1 ))]=$(( value+=1 ))
+		values=(${values[@]} ${line[@]:1})
 
 		read || eof='yes'
 	done
 
-	let tablen=$vloff+${#values[@]}*2+8
-
-	# Now with the values parsed calculate the offsets.
-	for i in ${!actions[@]}
+	# Now with the values parsed match their indices to actions.
+	for i in ${!actnames[@]}
 	do
 		vlname=${actnames[$i]}
-		action=${actions[$i]}
+		action=-1
 
 		if test $vlname != 'none'
 		then
 			indexof $vlname ${vlnames[@]}
 			test $index -eq -1 &&
 				err "fatal: kern values not found: $vlname"
-			let action+=$vloff+${vlindices[$index]}*2
+			action=$index
 		fi
 
 		actions[$i]=$action
 	done
+
+	# Calculate all the required lengths and offsets.
+	let cloff=10 # constant
+	let nmappings=$glend-$glstart+1
+	let clpad=$nmappings%2
+	let stoff=$cloff+4+$nmappings+$clpad # 4 for the glyph range
+	nstates=${#states[@]}
+	let stpad=$nstates*$nclasses%2
+	let etoff=$stoff+$nstates*$nclasses+$stpad
+	let vloff=$etoff+${#gotos[@]}*4
+	let tablen=$vloff+${#values[@]}*2+8
 
 	# Start printing the subtable with headers and the class lookups.
 	printf "\n\t<!-- Subtable No. %d -->\n" $(( ++tabno ))
 
 	printf "\n\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 		$off $tablen "Subtable length" && let off+=4
+
+	test $vertical = 'yes' && let tabfmt+=16#8000
+	test $crossstream = 'yes' && let tabfmt+=16#4000
+	test $variation = 'yes' && let tabfmt+=16#2000
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
 		$off $tabfmt "Coverage/format" \
@@ -329,8 +319,8 @@ do
 
 	# Pad the class lookups with zeros for word-alignment if necessary.
 	test $clpad -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"00\"/>\n" \
-			$off && let off+=1
+		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
+			$off $(( clpad * 2 )) 0 && let off+=$clpad
 
 	# Print at least stubs of class names along the transitions.
 	printf "\n\t                            <!-- "
@@ -346,28 +336,49 @@ do
 
 	# Pad the state table if necessary.
 	test $stpad -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"00\"/>\n" \
-			$off && let off+=1
+		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
+			$off $(( stpad * 2 )) 0 && let off+=$stpad
 
 	printf "\n"
 	for i in ${!gotos[@]}
 	do
+		let goto=$stoff+${gotos[$i]}*$nclasses
+		flact=0 # flags plus action
+		test ${flpush[$i]} = 'yes' && let flact+=16#8000
+		test ${fladvance[$i]} = 'yes' || let flact+=16#4000
+		if test ${actions[$i]} -ge 0
+		then
+			vlindex=${vlindices[${actions[$i]}]}
+			let flact+=$vloff+$vlindex*2
+		fi
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X\"/> <!-- %02X %s -->\n" \
-			$off ${gotos[$i]} ${actions[$i]} $i ${gtnames[$i]} && let off+=4
+			$off $goto $flact $i ${gtnames[$i]} && let off+=4
 	done
 
-	i=0
-	j=0
+	val=0
 	printf "\n"
-	for value in ${values[@]}
+	for i in ${!vlindices[@]}
 	do
-		# Print the list's name on its first value only.
-		unset vlname
-		test ${vlindices[$j]} && test $(( i++ )) -eq ${vlindices[$j]} &&
-			vlname=" <!-- ${vlnames[(( j++ ))]} -->"
+		printf "\t<dataline offset=\"%08X\" hex=\"" $off
 
-		printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/>%s\n" \
-			$off $value "$vlname" && let off+=2
+		nextval=${vlindices[(( i+1 ))]=${#values[@]}}
+		while test $val -lt $nextval
+		do
+			value=${values[$val]}
+
+			# Make a 2's complement for a negative value.
+			test $value -lt 0 && let value=16#10000+$value
+
+			# Unset the least significant bit of each value.
+			let value-=$value%2
+
+			# Set the list-end flag for the last value in a list.
+			test $(( ++val )) -eq $nextval && let value+=1
+
+			printf "%04X " $value && let off+=2
+		done
+
+		printf "\"/> <!-- %s -->\n" ${vlnames[$i]}
 	done
 
 done <<<"$kif"
