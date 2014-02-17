@@ -137,7 +137,7 @@ do
 		if grep -q '^\+' <<<"$REPLY"
 		then
 			linetmp=($REPLY)
-			linecont=(${linetmp[@]:1})
+			test ${#linetmp[@]} -gt 1 && linecont=(${linetmp[@]:1})
 			continue
 		fi
 
