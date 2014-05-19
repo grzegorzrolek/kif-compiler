@@ -14,8 +14,15 @@ err () {
 test $# != 2 &&
 	err "usage: $(basename $0) <post.xml> <kern.kif>" 2
 
+post=$1 # Path to the 'post' table dump
+
+# Find the line offset to the first glyph name record in the 'post' dump.
+postoff=$(grep -n '\.notdef' $post | cut -d : -f 1)
+test $postoff ||
+	err "fatal: required glyph .notdef missing"
+
 # Parse the 'post' table dump for an array of glyphs names.
-glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$1))
+glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
 
 # Remove comments from the KIF file.
 kif="$(sed -e '/^\/\/.*/d' -e 's/[ 	]*\/\/.*//' $2)"
@@ -149,9 +156,10 @@ do
 
 		for glyph in ${line[@]:1}
 		do
-			indexof $glyph ${glnames[@]}
-			test $index -eq -1 &&
+			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
+			test $index ||
 				err "fatal: glyph not found: $glyph"
+			let index-=$postoff
 			classes[$index]=$nclasses
 			test $index -lt ${glstart=$index} && glstart=$index
 			test $index -gt ${glend=$index} && glend=$index
