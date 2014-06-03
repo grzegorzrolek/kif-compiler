@@ -60,7 +60,7 @@ do
 
 	vertical='no'
 	crossstream='no'
-	variation='no'
+	unset tabfmt # Subtable format
 	classes=() # GID-indexed array of classes
 	clnames=(EOT OOB DEL EOL) # Class names
 	unset glstart # First glyph assigned to a class
@@ -112,21 +112,6 @@ do
 			yes) crossstream='yes';;
 			no) ;;
 			*) err "fatal: bad cross-stream flag: ${line[@]:1}";;
-		esac
-
-		unset REPLY
-		until test "$REPLY"
-		do read
-		done
-		line=($REPLY)
-	fi
-
-	if test $line = "Variation"
-	then
-		case ${line[@]:1} in
-			yes) variation='yes';;
-			no) ;;
-			*) err "fatal: bad variation flag: ${line[@]:1}";;
 		esac
 
 		unset REPLY
@@ -297,13 +282,16 @@ do
 	printf "\n\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 		$off $tablen "Subtable length" && let off+=4
 
-	test $vertical = 'yes' && let tabfmt+=16#8000
-	test $crossstream = 'yes' && let tabfmt+=16#4000
-	test $variation = 'yes' && let tabfmt+=16#2000
+	flcover=0
+	test $vertical = 'yes' && let flcover+=16#80
+	test $crossstream = 'yes' && let flcover+=16#40
+
+	printf "\t<dataline offset=\"%08X\" hex=\"%02X\"/> <!-- %s -->\n" \
+		$off $flcover "Coverage" \
+		$(( off += 1 )) $tabfmt "Format" && let off+=1
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
-		$off $tabfmt "Coverage/format" \
-		$(( off += 2 )) 0 "Variation tuple index" && let off+=2
+		$off 0 "Variation tuple index" && let off+=2
 
 	printf "\n"
 	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \

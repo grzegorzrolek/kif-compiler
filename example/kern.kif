@@ -13,7 +13,6 @@
 Type Contextual // the only type supported for now
 Orientation H // (H)orizontal or (V)ertical
 Cross-stream no // optional; defaults to 'no'
-Variation no // optional; defaults to 'no'
 
 // Class listing and the state table follow the MIF syntax literally:
 

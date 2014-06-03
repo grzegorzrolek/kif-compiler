@@ -37,13 +37,12 @@ state table, follow the MIF syntax literally; the rest is modified to
 handle the specifics of the kerning table as follows.
 
 Subtable header is shortened to Type and Orientation, both required
-fields. These are supplemented with two additional ones, Cross-stream
-and Variation, both of a yes/no value that default to 'no':
+fields. These are supplemented with additional Cross-stream flag of a
+yes/no value that defaults to 'no':
 
 Type Contextual
 Orientation H/V
 Cross-stream yes/no
-Variation yes/no
 
 Entry table swaps the Mark flag for a Push flag, which pushes current
 glyph onto the kern stack. It also has a single action, KernValues, that
@@ -69,6 +68,9 @@ For now, only contextual kerning subtables are available. Moreover, the
 recently found 'kerx' extended kerning table is not fully documented,
 so it makes it an old 'kern' table also. Still, the old one works well
 in CoreText on both OS X and iOS, so this shouldn't be an issue.
+
+Specifying kerning variations, part of the TrueType Variations
+technology found originally in AAT, is also currently not available.
 
 
 COPYRIGHT & LICENSE NOTICE
