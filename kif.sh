@@ -41,6 +41,14 @@ indexof () {
 }
 
 
+let tabhead=4+2*2 # Subtable header size
+let cloff=5*2 # Class table offset (length of a state table header)
+let clhead=2*2 # Size of the class table header
+let clsize=1 # Class record size
+let trsize=1 # Transition size
+let etsize=2+2 # Full entry size in the entry table
+let vlsize=2 # Value size
+
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"kern\">\n"
 
@@ -266,15 +274,16 @@ do
 	done
 
 	# Calculate all the required lengths and offsets.
-	let cloff=10 # constant
-	let nmappings=$glend-$glstart+1
-	let clpad=$nmappings%2
-	let stoff=$cloff+4+$nmappings+$clpad # 4 for the glyph range
-	nstates=${#states[@]}
-	let stpad=$nstates*$nclasses%2
-	let etoff=$stoff+$nstates*$nclasses+$stpad
-	let vloff=$etoff+${#gotos[@]}*4
-	let tablen=$vloff+${#values[@]}*2+8
+	let nmappings=$glend-$glstart+1 # No. of mappings in the class table
+	let mapsize=$clsize # Class lookup entry size
+	let cllen=$clhead+$nmappings*$mapsize # Class table length
+	let clpad=$cllen%2 # Padding
+	let stoff=$cloff+$cllen+$clpad # State table offset
+	let stlen=${#states[@]}*$nclasses*$trsize # State table length
+	let stpad=$stlen%2 # Padding
+	let etoff=$stoff+$stlen+$stpad # Entry table offset
+	let vloff=$etoff+${#gotos[@]}*$etsize # Kern values offset
+	let tablen=$tabhead+$vloff+${#values[@]}*$vlsize # Subtable length
 
 	# Start printing the subtable with headers and the class lookups.
 	printf "\n\t<!-- Subtable No. %d -->\n" $(( ++tabno ))
@@ -310,7 +319,7 @@ do
 	do
 		class=${classes[$i]}
 		printf "\t<dataline offset=\"%08X\" hex=\"%02X\"/> <!-- %s -->\n" \
-			$off $class "${clnames[$class]}: ${glnames[$i]}" && let off+=1
+			$off $class "${clnames[$class]}: ${glnames[$i]}" && let off+=$mapsize
 	done
 
 	# Pad the class lookups with zeros for word-alignment if necessary.
@@ -326,7 +335,7 @@ do
 	for i in ${!states[@]}
 	do
 		printf "\t<dataline offset=\"%08X\" hex=\"" $off
-		printf "%02X " ${states[$i]} && let off+=$nclasses
+		printf "%02X " ${states[$i]} && let off+=$nclasses*$trsize
 		printf "\"/> <!-- %s -->\n" ${stnames[$i]}
 	done
 
@@ -345,10 +354,10 @@ do
 		if test ${actions[$i]} -ge 0
 		then
 			vlindex=${vlindices[${actions[$i]}]}
-			let flact+=$vloff+$vlindex*2
+			let flact+=$vloff+$vlindex*$vlsize
 		fi
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X\"/> <!-- %02X %s -->\n" \
-			$off $goto $flact $i ${gtnames[$i]} && let off+=4
+			$off $goto $flact $i ${gtnames[$i]} && let off+=$etsize
 	done
 
 	val=0
@@ -371,7 +380,7 @@ do
 			# Set the list-end flag for the last value in a list.
 			test $(( ++val )) -eq $nextval && let value+=1
 
-			printf "%04X " $value && let off+=2
+			printf "%04X " $value && let off+=$vlsize
 		done
 
 		printf "\"/> <!-- %s -->\n" ${vlnames[$i]}
