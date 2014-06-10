@@ -282,8 +282,12 @@ do
 	let stlen=${#states[@]}*$nclasses*$trsize # State table length
 	let stpad=$stlen%2 # Padding
 	let etoff=$stoff+$stlen+$stpad # Entry table offset
-	let vloff=$etoff+${#gotos[@]}*$etsize # Kern values offset
-	let tablen=$tabhead+$vloff+${#values[@]}*$vlsize # Subtable length
+	let etlen=${#gotos[@]}*$etsize # Entry table length
+	let etpad=$etlen%2 # Padding
+	let vloff=$etoff+$etlen+$etpad # Kern values offset
+	let vllen=${#values[@]}*$vlsize # Values length
+	let vlpad=$vllen%2 # Padding
+	let tablen=$tabhead+$vloff+$vllen+$vlpad # Subtable length
 
 	# Start printing the subtable with headers and the class lookups.
 	printf "\n\t<!-- Subtable No. %d -->\n" $(( ++tabno ))
@@ -360,6 +364,10 @@ do
 			$off $goto $flact $i ${gtnames[$i]} && let off+=$etsize
 	done
 
+	test $etpad -ne 0 &&
+		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
+			$off $(( etpad * 2 )) 0 && let off+=$etpad
+
 	val=0
 	printf "\n"
 	for i in ${!vlindices[@]}
@@ -385,6 +393,10 @@ do
 
 		printf "\"/> <!-- %s -->\n" ${vlnames[$i]}
 	done
+
+	test $vlpad -ne 0 &&
+		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
+			$off $(( vlpad * 2 )) 0 && let off+=$vlpad
 
 done <<<"$kif"
 
