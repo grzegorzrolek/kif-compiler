@@ -22,6 +22,15 @@ be now fused into the font, again with the Font Tools:
 
 ftxdumperfuser --table kern --generic --datafile kern.xml font.ttf
 
+You can also produce the new 'kerx' extended kerning table by running
+the compiler with an -x option:
+
+kif.sh -x post.xml kern.kif >kerx.xml
+
+In that case, the fuse command will have to be modified accordingly:
+
+ftxdumperfuser --table kerx --generic --datafile kerx.xml font.ttf
+
 Hex code in the kern data file is nicely formatted and commented, what
 can be of much help in case something goes wrong in the process.
 
@@ -66,8 +75,9 @@ LIMITATIONS
 
 For now, only contextual kerning subtables are available. Moreover, the
 recently found 'kerx' extended kerning table is not fully documented,
-so it makes it an old 'kern' table also. Still, the old one works well
-in CoreText on both OS X and iOS, so this shouldn't be an issue.
+so consider the code produced as being in part reverse-engineered with
+all the usual caveats. In case any issues should arise, a regular 'kern'
+table works well in CoreText on both OS X and iOS.
 
 Specifying kerning variations, part of the TrueType Variations
 technology found originally in AAT, is also currently not available.
