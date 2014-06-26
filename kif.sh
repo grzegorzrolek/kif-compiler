@@ -265,6 +265,10 @@ do
 		test "$REPLY" || { read || eof='yes'; continue; }
 		grep -q 'Type' <<<"$REPLY" && break
 
+		# Don't allow for a reset value in a non-cross-stream table.
+		! test $crossstream = 'yes' && grep -q 'Reset' <<<"$REPLY" &&
+			err "fatal: kern reset in a non-cross-stream table"
+
 		line=($REPLY)
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
@@ -484,6 +488,9 @@ do
 		while test $val -lt $nextval
 		do
 			value=${values[$val]}
+
+			# Make the special reset value into a proper flag.
+			test $value = 'Reset' && let value=16#8000
 
 			# Make a 2's complement for a negative value.
 			test $value -lt 0 && let value=16#10000+$value

@@ -67,6 +67,10 @@ popping the stack glyph by glyph until the list is consumed:
 
 ListName KernValue KernValue ...
 
+For the cross-stream kerning subtables, a special value, Reset, can be
+used within the list of values. It makes the glyph to which it is
+applied be reset to baseline from any accumulated cross-stream kern.
+
 This concludes a subtable. Please see the accompanying example directory
 for a working example and more commentary.
 
