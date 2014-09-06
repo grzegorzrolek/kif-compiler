@@ -151,11 +151,11 @@ do
 	do
 		# Skip blanks, but break on a state table header (an indent).
 		test "$REPLY" || { read; continue; }
-		grep -q '^[a-zA-Z+]' <<<"$REPLY" || break
+		test -z "${REPLY##[a-zA-Z+]*}" || break
 
 		line=(${line[@]} ${linecont[@]-$REPLY})
 		read
-		if grep -q '^\+' <<<"$REPLY"
+		if test "${REPLY:0:1}" = '+'
 		then
 			linetmp=($REPLY)
 			test ${#linetmp[@]} -gt 1 && linecont=(${linetmp[@]:1})
@@ -198,7 +198,7 @@ do
 	do
 		# Break on a blank line or an entry table header.
 		test "$REPLY" || break
-		grep -q '^[a-zA-Z]' <<<"$REPLY" || break
+		test -z "${REPLY##[a-zA-Z]*}" || break
 
 		line=($REPLY)
 		stnames=(${stnames[@]} $line)
@@ -237,7 +237,7 @@ do
 	do
 		# Break on a blank, and an indent (the Font Tools way).
 		test "$REPLY" || break
-		grep -q '^[a-zA-Z0-9_]' <<<"$REPLY" || break
+		test -z "${REPLY##[a-zA-Z0-9_]*}" || break
 
 		line=($REPLY)
 		let entry=${#gotos[@]}+1
@@ -263,10 +263,10 @@ do
 		# Skip blanks, but break on next subtable, or an end of file.
 		test $eof && break
 		test "$REPLY" || { read || eof='yes'; continue; }
-		grep -q 'Type' <<<"$REPLY" && break
+		test -z "${REPLY##Type*}" && break
 
 		# Don't allow for a reset value in a non-cross-stream table.
-		! test $crossstream = 'yes' && grep -q 'Reset' <<<"$REPLY" &&
+		! test $crossstream = 'yes' && test -z "${REPLY##*Reset*}" &&
 			err "fatal: kern reset in a non-cross-stream table"
 
 		line=($REPLY)
