@@ -69,7 +69,7 @@ printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
 # Print the table header before reading actual subtables.
-ntables=$(grep -c '^Type ' <<<"$kif")
+ntables=$(grep -c '^Type[ 	]' <<<"$kif")
 off=0 # current offset into the table
 
 printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
@@ -263,7 +263,7 @@ do
 		# Skip blanks, but break on next subtable, or an end of file.
 		test $eof && break
 		test "$REPLY" || { read || eof='yes'; continue; }
-		test -z "${REPLY##Type*}" && break
+		test -z "${REPLY##Type[ 	]*}" && break
 
 		# Don't allow for a reset value in a non-cross-stream table.
 		! test $crossstream = 'yes' && test -z "${REPLY##*Reset*}" &&
