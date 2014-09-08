@@ -61,11 +61,12 @@ gives the name of a list of kern values to apply on the stack:
 1   StateName   yes/no  yes/no      ListName/none
 2   ...
 
-Numeric kern values follow, each list on a separate line with the list's
-name in front. Each value is applied to the kern stack in order of
-popping the stack glyph by glyph until the list is consumed:
+Lists of values follow, each with a name on its own line, and the values
+indented on the line beneath. Each value is applied to the kern stack
+in order of popping the stack glyph by glyph until the list is consumed:
 
-ListName KernValue KernValue ...
+ListName
+    KernValue KernValue ...
 
 For the cross-stream kerning subtables, a special value, Reset, can be
 used within the list of values. It makes the glyph to which it is

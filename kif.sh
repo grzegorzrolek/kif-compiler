@@ -265,16 +265,33 @@ do
 		test "$REPLY" || { read || eof='yes'; continue; }
 		test -z "${REPLY##Type[ 	]*}" && break
 
-		# Don't allow for a reset value in a non-cross-stream table.
-		! test $crossstream = 'yes' && test -z "${REPLY##*Reset*}" &&
-			err "fatal: kern reset in a non-cross-stream table"
-
 		line=($REPLY)
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
-		values=(${values[@]} ${line[@]:1})
 
-		read || eof='yes'
+		# Skip blanks beneath the kern list name.
+		unset REPLY
+		until test "$REPLY"
+		do read || { eof='yes'; break; }
+		done
+
+		# Read values in all the indented lines beneath the name.
+		while test "${REPLY##[a-zA-Z_]*}"
+		do
+			test $eof && break
+
+			# Skip blanks between the values, if any.
+			test "$REPLY" || { read || eof='yes'; continue; }
+
+			# Fail on a reset value in a non-cross-stream table.
+			! test $crossstream = 'yes' &&
+				test -z "${REPLY##*Reset*}" &&
+				err "fatal: kern reset in a non-cross-stream table"
+
+			values=(${values[@]} $REPLY)
+
+			read || eof='yes'
+		done
 	done
 
 	# Now with the values parsed match their indices to actions.

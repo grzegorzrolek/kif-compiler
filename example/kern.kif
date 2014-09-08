@@ -40,7 +40,10 @@ Elision     1   1   4   1   1   1   5
 // from the stack one by one until the last value is consumed (multiple
 // values applied to one particular glyph on a stack are additive):
 
-LElision -60 // kerns the foremost glyph from the current stack
-LtoAElision 40 20 // first the most, then the second most recent glyph
+LElision
+    -60 // kerns the foremost glyph from the current stack
+
+LtoAElision
+    40 20 // first the most, then the second most recent glyph
 
 // More subtables are defined in sequence, the way it's done with a MIF.
