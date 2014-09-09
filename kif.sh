@@ -311,6 +311,25 @@ do
 		actions[$i]=$action
 	done
 
+	# Pre-compute the end-of-list marker count prior to each action.
+	if test $tag = 'kerx'
+	then
+		eolmarks=() # Marker count, action-indexed
+		previndex=0
+		nmarks=0
+		for i in ${!vlindices[@]}
+		do
+			currindex=${vlindices[$i]}
+
+			# Increase the count for non-empty actions only.
+			test $currindex -gt $previndex &&
+				let nmarks++
+
+			eolmarks[$i]=$nmarks
+			previndex=$currindex
+		done
+	fi
+
 	if test $tag = 'kerx'
 	then
 		# Filter out glyph segments for the class lookups.
@@ -359,7 +378,7 @@ do
 	let vloff=$etoff+$etlen+$etpad # Kern values offset
 	let vllen=${#values[@]}*$vlsize # Values length
 	test $tag = 'kerx' &&
-		let vllen+=${#vlindices[@]}*$vlsize # End-of-list markers
+		let vllen+=\($nmarks+1\)*$vlsize # the end-of-list markers
 	let vlpad=$vllen/$v%2*$v # Padding
 	let tablen=$tabhead+$vloff+$vllen+$vlpad # Subtable length
 
@@ -480,7 +499,7 @@ do
 			vlindex=${vlindices[$action]}
 
 			if test $tag = 'kerx'
-			then let flact+=$vlindex+$action # + end-of-list markers
+			then let flact+=$vlindex+${eolmarks[$action]}
 			else let flact+=$vloff+$vlindex*$vlsize
 			fi
 		else
