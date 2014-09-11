@@ -102,7 +102,7 @@ do
 	vlnames=() # Names of the kern value lists
 	vlindices=() # Indexes of values beginning the lists
 
-	until test "$REPLY"
+	until test "${REPLY//[ 	]/}"
 	do read
 	done
 	line=($REPLY)
@@ -114,7 +114,7 @@ do
 	esac
 
 	unset REPLY
-	until test "$REPLY"
+	until test "${REPLY//[ 	]/}"
 	do read
 	done
 	line=($REPLY)
@@ -127,7 +127,7 @@ do
 	esac
 
 	unset REPLY
-	until test "$REPLY"
+	until test "${REPLY//[ 	]/}"
 	do read
 	done
 	line=($REPLY)
@@ -140,7 +140,7 @@ do
 		esac
 
 		unset REPLY
-		until test "$REPLY"
+		until test "${REPLY//[ 	]/}"
 		do read
 		done
 	fi
@@ -150,7 +150,7 @@ do
 	while true
 	do
 		# Skip blanks, but break on a state table header (an indent).
-		test "$REPLY" || { read; continue; }
+		test "${REPLY//[ 	]/}" || { read; continue; }
 		test -z "${REPLY##[a-zA-Z+]*}" || break
 
 		line=(${line[@]} ${linecont[@]-$REPLY})
@@ -191,13 +191,13 @@ do
 
 	# Skip blanks directly beneath the header.
 	unset REPLY
-	until test "$REPLY"
+	until test "${REPLY//[ 	]/}"
 	do read
 	done
 	while true
 	do
 		# Break on a blank line or an entry table header.
-		test "$REPLY" || break
+		test "${REPLY//[ 	]/}" || break
 		test -z "${REPLY##[a-zA-Z]*}" || break
 
 		line=($REPLY)
@@ -219,7 +219,7 @@ do
 	done
 
 	# Skip any more blanks if necessary.
-	until test "$REPLY"
+	until test "${REPLY//[ 	]/}"
 	do read
 	done
 
@@ -230,13 +230,13 @@ do
 
 	# Skip blanks beneath the header.
 	unset REPLY
-	until test "$REPLY"
+	until test "${REPLY//[ 	]/}"
 	do read
 	done
 	while true
 	do
 		# Break on a blank, and an indent (the Font Tools way).
-		test "$REPLY" || break
+		test "${REPLY//[ 	]/}" || break
 		test -z "${REPLY##[a-zA-Z0-9_]*}" || break
 
 		line=($REPLY)
@@ -262,7 +262,7 @@ do
 	do
 		# Skip blanks, but break on next subtable, or an end of file.
 		test $eof && break
-		test "$REPLY" || { read || eof='yes'; continue; }
+		test "${REPLY//[ 	]/}" || { read || eof='yes'; continue; }
 		test -z "${REPLY##Type[ 	]*}" && break
 
 		line=($REPLY)
@@ -271,7 +271,7 @@ do
 
 		# Skip blanks beneath the kern list name.
 		unset REPLY
-		until test "$REPLY"
+		until test "${REPLY//[ 	]/}"
 		do read || { eof='yes'; break; }
 		done
 
@@ -281,7 +281,7 @@ do
 			test $eof && break
 
 			# Skip blanks between the values, if any.
-			test "$REPLY" || { read || eof='yes'; continue; }
+			test "${REPLY//[ 	]/}" || { read || eof='yes'; continue; }
 
 			# Fail on a reset value in a non-cross-stream table.
 			! test $crossstream = 'yes' &&
