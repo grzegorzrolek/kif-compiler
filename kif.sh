@@ -149,8 +149,7 @@ do
 	let nclasses=4 # four built-in classes
 	while true
 	do
-		# Skip blanks, but break on a state table header (an indent).
-		test "${REPLY//[ 	]/}" || { read; continue; }
+		# Break on a state table header (indented line).
 		test -z "${REPLY##[a-zA-Z+]*}" || break
 
 		line=(${line[@]} ${linecont[@]-$REPLY})
@@ -177,6 +176,10 @@ do
 
 		let nclasses++
 		unset line linecont
+
+		until test "${REPLY//[ 	]/}"
+		do read
+		done
 	done
 
 	# Set an Out-of-Bounds class on glyphs inbetween the specified ones.
@@ -258,11 +261,12 @@ do
 		read
 	done
 
+	until test "${REPLY//[ 	]/}"
+	do read
+	done
 	while true
 	do
-		# Skip blanks, but break on next subtable, or an end of file.
-		test $eof && break
-		test "${REPLY//[ 	]/}" || { read || eof='yes'; continue; }
+		# Break on the next subtable.
 		test -z "${REPLY##Type[ 	]*}" && break
 
 		line=($REPLY)
@@ -272,17 +276,12 @@ do
 		# Skip blanks beneath the kern list name.
 		unset REPLY
 		until test "${REPLY//[ 	]/}"
-		do read || { eof='yes'; break; }
+		do read || { eof='yes'; break 2; }
 		done
 
 		# Read values in all the indented lines beneath the name.
 		while test "${REPLY##[a-zA-Z_]*}"
 		do
-			test $eof && break
-
-			# Skip blanks between the values, if any.
-			test "${REPLY//[ 	]/}" || { read || eof='yes'; continue; }
-
 			# Fail on a reset value in a non-cross-stream table.
 			! test $crossstream = 'yes' &&
 				test -z "${REPLY##*Reset*}" &&
@@ -290,7 +289,11 @@ do
 
 			values=(${values[@]} $REPLY)
 
-			read || eof='yes'
+			# Skip blanks between the values, if any.
+			unset REPLY
+			until test "${REPLY//[ 	]/}"
+			do read || { eof='yes'; break 3; }
+			done
 		done
 	done
 
