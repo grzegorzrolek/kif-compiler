@@ -41,9 +41,6 @@ test $postoff ||
 # Parse the 'post' table dump for an array of glyphs names.
 glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
 
-# Remove comments from the KIF file.
-kif="$(sed -e '/^\/\/.*/d' -e 's/[ 	]*\/\/.*//' $2)"
-
 # Fills $index with index of a token within the list following the token.
 indexof () {
 	index=0
@@ -69,7 +66,7 @@ printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
 # Print the table header before reading actual subtables.
-ntables=$(grep -c '^Type[ 	]' <<<"$kif")
+ntables=$(grep -c '^Type[ 	]' $2)
 off=0 # current offset into the table
 
 printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
@@ -80,8 +77,8 @@ printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 
 {
 
-# Skip blank lines in front of the input file.
-until test "${REPLY//[ 	]/}"
+# Skip blank lines and line comments in front of the input file.
+until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 do read
 done
 
@@ -109,7 +106,8 @@ do
 	vlnames=() # Names of the kern value lists
 	vlindices=() # Indexes of values beginning the lists
 
-	line=($REPLY)
+	# Parse the input line, comments excluded.
+	line=(${REPLY%%[ 	]\/\/*})
 	test $line != "Type" &&
 		err "fatal: kerning type expected"
 	case ${line[@]:1} in
@@ -118,10 +116,10 @@ do
 	esac
 
 	unset REPLY
-	until test "${REPLY//[ 	]/}"
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
-	line=($REPLY)
+	line=(${REPLY%%[ 	]\/\/*})
 	test $line != "Orientation" &&
 		err "fatal: kerning orientation expected"
 	case ${line[@]:1} in
@@ -131,10 +129,10 @@ do
 	esac
 
 	unset REPLY
-	until test "${REPLY//[ 	]/}"
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
-	line=($REPLY)
+	line=(${REPLY%%[ 	]\/\/*})
 	if test $line = "Cross-stream"
 	then
 		case ${line[@]:1} in
@@ -144,7 +142,7 @@ do
 		esac
 
 		unset REPLY
-		until test "${REPLY//[ 	]/}"
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 		do read
 		done
 	fi
@@ -154,7 +152,7 @@ do
 	# Read classes until a state table header (indented line).
 	until test -z "${REPLY##[ 	]*}"
 	do
-		line=($REPLY)
+		line=(${REPLY%%[ 	]\/\/*})
 
 		# See if the class continues after newline.
 		read
@@ -162,7 +160,7 @@ do
 		# Join lines that do continue the class listing.
 		while test "${REPLY:0:1}" = '+'
 		do
-			linecont=($REPLY)
+			linecont=(${REPLY%%[ 	]\/\/*})
 			test ${#linecont[@]} -gt 1 &&
 				line=(${line[@]} ${linecont[@]:1})
 
@@ -184,7 +182,7 @@ do
 
 		let nclasses++
 
-		until test "${REPLY//[ 	]/}"
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 		do read
 		done
 	done
@@ -195,20 +193,20 @@ do
 	done
 
 	# Check if the class list and state table header match.
-	header=($REPLY)
+	header=(${REPLY%%[ 	]\/\/*})
 	test "${clnames[*]}" != "${header[*]}" &&
 		err "fatal: classes and state header don't match"
 
 	# Skip blanks directly beneath the header.
 	unset REPLY
-	until test "${REPLY//[ 	]/}"
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
 
 	# Read the state table until a blank or indented line.
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
 	do
-		line=($REPLY)
+		line=(${REPLY%%[ 	]\/\/*})
 		stnames=(${stnames[@]} $line)
 
 		# Make the entry numbers zero-based.
@@ -224,28 +222,33 @@ do
 		states[${#states[@]}]="${state[@]}"
 
 		read
+
+		# Skip line comments, but break on a blank line.
+		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
+		do read
+		done
 	done
 
 	# Skip any more blanks if necessary.
-	until test "${REPLY//[ 	]/}"
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
 
 	# Check if the entry table header is as expected.
-	header=($REPLY)
+	header=(${REPLY%%[ 	]\/\/*})
 	test "${header[*]}" != "GoTo Push? Advance? KernValues" &&
 		err "fatal: malformed entry table header"
 
 	# Skip blanks beneath the header.
 	unset REPLY
-	until test "${REPLY//[ 	]/}"
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
 
 	# Read entries until a blank line, or an indent (the Font Tools way).
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
 	do
-		line=($REPLY)
+		line=(${REPLY%%[ 	]\/\/*})
 		let entry=${#gotos[@]}+1
 		test $line -eq $entry ||
 			err "fatal: wrong number for entry listed as $entry"
@@ -262,22 +265,27 @@ do
 		actnames=(${actnames[@]} ${line[@]:4:1})
 
 		read
+
+		# Skip comments, but break on a blank.
+		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
+		do read
+		done
 	done
 
-	until test "${REPLY//[ 	]/}"
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
 
 	# Read values until the end of file or a next subtable header.
 	until test -z "$REPLY" -o -z "${REPLY##Type[ 	]*}"
 	do
-		line=($REPLY)
+		line=(${REPLY%%[ 	]\/\/*})
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
 
 		# Skip blanks beneath the kern list name.
 		unset REPLY
-		until test "${REPLY//[ 	]/}"
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 		do read || break 2
 		done
 
@@ -289,11 +297,11 @@ do
 				test -z "${REPLY##*Reset*}" &&
 				err "fatal: kern reset in a non-cross-stream table"
 
-			values=(${values[@]} $REPLY)
+			values=(${values[@]} ${REPLY%%[ 	]\/\/*})
 
 			# Skip blanks between the values, if any.
 			unset REPLY
-			until test "${REPLY//[ 	]/}"
+			until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 			do read || break 3
 			done
 		done
@@ -561,7 +569,7 @@ do
 
 done
 
-} <<<"$kif"
+} <$2
 
 printf "\n</genericSFNTTable>\n"
 exit
