@@ -145,21 +145,26 @@ do
 		done
 	fi
 
-	unset line
 	let nclasses=4 # four built-in classes
 	while true
 	do
 		# Break on a state table header (indented line).
-		test -z "${REPLY##[a-zA-Z+]*}" || break
+		test -z "${REPLY##[a-zA-Z]*}" || break
 
-		line=(${line[@]} ${linecont[@]-$REPLY})
+		line=($REPLY)
+
+		# See if the class continues after newline.
 		read
-		if test "${REPLY:0:1}" = '+'
-		then
-			linetmp=($REPLY)
-			test ${#linetmp[@]} -gt 1 && linecont=(${linetmp[@]:1})
-			continue
-		fi
+
+		# Join lines that do continue the class listing.
+		while test "${REPLY:0:1}" = '+'
+		do
+			linecont=($REPLY)
+			test ${#linecont[@]} -gt 1 &&
+				line=(${line[@]} ${linecont[@]:1})
+
+			read
+		done
 
 		clnames[${#clnames[@]}]=$line
 
@@ -175,7 +180,6 @@ do
 		done
 
 		let nclasses++
-		unset line linecont
 
 		until test "${REPLY//[ 	]/}"
 		do read
