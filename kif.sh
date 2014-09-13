@@ -78,8 +78,15 @@ printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
 printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 	$off $ntables "No. of subtables" && let off+=4
 
-# Read the KIF subtable by subtable until the end of file.
-until test $eof
+{
+
+# Skip blank lines in front of the input file.
+until test "${REPLY//[ 	]/}"
+do read
+done
+
+# Read the file subtable by subtable to the end of file.
+while test "$REPLY" -a -z "${REPLY##Type[ 	]*}"
 do
 
 	vertical='no'
@@ -102,9 +109,6 @@ do
 	vlnames=() # Names of the kern value lists
 	vlindices=() # Indexes of values beginning the lists
 
-	until test "${REPLY//[ 	]/}"
-	do read
-	done
 	line=($REPLY)
 	test $line != "Type" &&
 		err "fatal: kerning type expected"
@@ -146,11 +150,10 @@ do
 	fi
 
 	let nclasses=4 # four built-in classes
-	while true
-	do
-		# Break on a state table header (indented line).
-		test -z "${REPLY##[a-zA-Z]*}" || break
 
+	# Read classes until a state table header (indented line).
+	until test -z "${REPLY##[ 	]*}"
+	do
 		line=($REPLY)
 
 		# See if the class continues after newline.
@@ -201,12 +204,10 @@ do
 	until test "${REPLY//[ 	]/}"
 	do read
 	done
-	while true
-	do
-		# Break on a blank line or an entry table header.
-		test "${REPLY//[ 	]/}" || break
-		test -z "${REPLY##[a-zA-Z]*}" || break
 
+	# Read the state table until a blank or indented line.
+	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
+	do
 		line=($REPLY)
 		stnames=(${stnames[@]} $line)
 
@@ -240,12 +241,10 @@ do
 	until test "${REPLY//[ 	]/}"
 	do read
 	done
-	while true
-	do
-		# Break on a blank, and an indent (the Font Tools way).
-		test "${REPLY//[ 	]/}" || break
-		test -z "${REPLY##[a-zA-Z0-9_]*}" || break
 
+	# Read entries until a blank line, or an indent (the Font Tools way).
+	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
+	do
 		line=($REPLY)
 		let entry=${#gotos[@]}+1
 		test $line -eq $entry ||
@@ -268,11 +267,10 @@ do
 	until test "${REPLY//[ 	]/}"
 	do read
 	done
-	while true
-	do
-		# Break on the next subtable.
-		test -z "${REPLY##Type[ 	]*}" && break
 
+	# Read values until the end of file or a next subtable header.
+	until test -z "$REPLY" -o -z "${REPLY##Type[ 	]*}"
+	do
 		line=($REPLY)
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
@@ -280,11 +278,11 @@ do
 		# Skip blanks beneath the kern list name.
 		unset REPLY
 		until test "${REPLY//[ 	]/}"
-		do read || { eof='yes'; break 2; }
+		do read || break 2
 		done
 
 		# Read values in all the indented lines beneath the name.
-		while test "${REPLY##[a-zA-Z_]*}"
+		while test -z "${REPLY##[ 	]*}"
 		do
 			# Fail on a reset value in a non-cross-stream table.
 			! test $crossstream = 'yes' &&
@@ -296,7 +294,7 @@ do
 			# Skip blanks between the values, if any.
 			unset REPLY
 			until test "${REPLY//[ 	]/}"
-			do read || { eof='yes'; break 3; }
+			do read || break 3
 			done
 		done
 	done
@@ -561,7 +559,9 @@ do
 		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
 			$off $(( vlpad * 2 )) 0 && let off+=$vlpad
 
-done <<<"$kif"
+done
+
+} <<<"$kif"
 
 printf "\n</genericSFNTTable>\n"
 exit
