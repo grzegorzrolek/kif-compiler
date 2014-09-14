@@ -122,6 +122,7 @@ do
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
+
 	line=(${REPLY%%[ 	]\/\/*})
 	test $line != "Orientation" &&
 		err "fatal: kerning orientation expected"
@@ -136,6 +137,7 @@ do
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
+
 	line=(${REPLY%%[ 	]\/\/*})
 	if test $line = "Cross-stream"
 	then
@@ -203,8 +205,8 @@ do
 	done
 
 	# Check if the class list and state table header match.
-	header=(${REPLY%%[ 	]\/\/*})
-	test "${clnames[*]}" != "${header[*]}" &&
+	line=(${REPLY%%[ 	]\/\/*})
+	test "${clnames[*]}" != "${line[*]}" &&
 		err "fatal: classes and state header don't match"
 
 	read
@@ -246,8 +248,8 @@ do
 	done
 
 	# Check if the entry table header is as expected.
-	header=(${REPLY%%[ 	]\/\/*})
-	test "${header[*]}" != "GoTo Push? Advance? KernValues" &&
+	line=(${REPLY%%[ 	]\/\/*})
+	test "${line[*]}" != "GoTo Push? Advance? KernValues" &&
 		err "fatal: malformed entry table header"
 
 	read
@@ -305,12 +307,14 @@ do
 		# Read values in all the indented lines beneath the name.
 		while test -z "${REPLY##[ 	]*}"
 		do
+			line=(${REPLY%%[ 	]\/\/*})
+
 			# Fail on a reset value in a non-cross-stream table.
 			! test $crossstream = 'yes' &&
 				test -z "${REPLY##*Reset*}" &&
 				err "fatal: kern reset in a non-cross-stream table"
 
-			values=(${values[@]} ${REPLY%%[ 	]\/\/*})
+			values=(${values[@]} ${line[@]})
 
 			read || break 2
 
