@@ -56,6 +56,7 @@ indexof () {
 
 
 eof="fatal: premature end of file"
+l=0 # No. of line being parsed
 
 let tabhead=4+2*2*$v # Subtable header size
 let cloff=5*2*$v # Class table offset (length of a state table header)
@@ -77,13 +78,14 @@ printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
 printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 	$off $ntables "No. of subtables" && let off+=4
 
+
 {
 
-read
+read; let l++
 
 # Skip blank lines and line comments in front of the input file.
 until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-do read
+do read; let l++
 done
 
 # Read the file subtable by subtable to the end of file.
@@ -113,31 +115,31 @@ do
 	# Parse the input line, comments excluded.
 	line=(${REPLY%%[ 	]\/\/*})
 	test $line != "Type" &&
-		err "fatal: kerning type expected"
+		err "fatal: kerning type expected (line $l)"
 	case ${line[@]:1} in
 		Contextual) tabfmt=1;;
-		*) err "fatal: unknown kerning type: ${line[@]:1}";;
+		*) err "fatal: unknown kerning type: ${line[@]:1} (line $l)";;
 	esac
 
-	read || err "$eof"
+	read || err "$eof"; let l++
 
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"
+	do read || err "$eof"; let l++
 	done
 
 	line=(${REPLY%%[ 	]\/\/*})
 	test $line != "Orientation" &&
-		err "fatal: kerning orientation expected"
+		err "fatal: kerning orientation expected (line $l)"
 	case ${line[@]:1} in
 		V) vertical='yes';;
 		H) ;;
-		*) err "fatal: bad orientation flag: ${line[@]:1}";;
+		*) err "fatal: bad orientation flag: ${line[@]:1} (line $l)";;
 	esac
 
-	read || err "$eof"
+	read || err "$eof"; let l++
 
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"
+	do read || err "$eof"; let l++
 	done
 
 	line=(${REPLY%%[ 	]\/\/*})
@@ -146,13 +148,13 @@ do
 		case ${line[@]:1} in
 			yes) crossstream='yes';;
 			no) ;;
-			*) err "fatal: bad cross-stream flag: ${line[@]:1}";;
+			*) err "fatal: bad cross-stream flag: ${line[@]:1} (line $l)";;
 		esac
 
-		read || err "$eof"
+		read || err "$eof"; let l++
 
 		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || err "$eof"
+		do read || err "$eof"; let l++
 		done
 	fi
 
@@ -172,18 +174,18 @@ do
 		do
 			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
 			test $index ||
-				err "fatal: glyph not found: $glyph"
+				err "fatal: glyph not found: $glyph (line $l)"
 			let index-=$postoff
 			classes[$index]=$nclasses
 			test $index -lt ${glstart=$index} && glstart=$index
 			test $index -gt ${glend=$index} && glend=$index
 		done
 
-		read || err "$eof"
+		read || err "$eof"; let l++
 
 		# Skip blanks and comments inbetween.
 		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || err "$eof"
+		do read || err "$eof"; let l++
 		done
 	done
 
@@ -198,13 +200,13 @@ do
 	# Check if the class list and state table header match.
 	line=(${REPLY%%[ 	]\/\/*})
 	test "${clnames[*]}" != "${line[*]}" &&
-		err "fatal: classes and state header don't match"
+		err "fatal: classes and state header don't match (line $l)"
 
-	read || err "$eof"
+	read || err "$eof"; let l++
 
 	# Skip blanks directly beneath the header.
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"
+	do read || err "$eof"; let l++
 	done
 
 	# Read the state table until a blank or indented line.
@@ -222,33 +224,35 @@ do
 		done
 
 		test "${#state[@]}" -ne "$nclasses" &&
-			err "fatal: wrong entry count in state: $line"
+			err "fatal: wrong entry count in state: $line (line $l)"
 		states[${#states[@]}]="${state[@]}"
 
-		read || err "$eof"
+		read || err "$eof"; let l++
 
 		# Skip line comments, but break on a blank line.
 		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
-		do read || err "$eof"
+		do read || err "$eof"; let l++
 		done
 	done
 
 	# Skip any more blanks if necessary.
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"
+	do read || err "$eof"; let l++
 	done
 
 	# Check if the entry table header is as expected.
 	line=(${REPLY%%[ 	]\/\/*})
 	test "${line[*]}" != "GoTo Push? Advance? KernValues" &&
-		err "fatal: malformed entry table header"
+		err "fatal: malformed entry table header (line $l)"
 
-	read || err "$eof"
+	read || err "$eof"; let l++
 
 	# Skip blanks beneath the header.
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"
+	do read || err "$eof"; let l++
 	done
+
+	lact=() # Line numbers of actions for later reporting
 
 	# Read entries until a blank line, or an indent (the Font Tools way).
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
@@ -256,29 +260,30 @@ do
 		line=(${REPLY%%[ 	]\/\/*})
 		let entry=${#gotos[@]}+1
 		test $line -eq $entry ||
-			err "fatal: wrong number for entry listed as $entry"
+			err "fatal: wrong number for entry listed as $entry (line $l)"
 
 		stname=${line[@]:1:1}
 		indexof $stname ${stnames[@]}
 		test $index -eq -1 &&
-			err "fatal: state not found: $stname"
+			err "fatal: state not found: $stname (line $l)"
 		gotos=(${gotos[@]} $index)
 		gtnames=(${gtnames[@]} $stname)
 
 		flpush=(${flpush[@]} ${line[@]:2:1})
 		fladvance=(${fladvance[@]} ${line[@]:3:1})
 		actnames=(${actnames[@]} ${line[@]:4:1})
+		lact=(${lact[@]} $l)
 
-		read || err "$eof"
+		read || err "$eof"; let l++
 
 		# Skip comments, but break on a blank.
 		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
-		do read || err "$eof"
+		do read || err "$eof"; let l++
 		done
 	done
 
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"
+	do read || err "$eof"; let l++
 	done
 
 	# Read values until the end of file or a next subtable header.
@@ -288,11 +293,11 @@ do
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
 
-		read || break
+		read || break; let l++
 
 		# Skip blanks beneath the kern list name.
 		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || break 2
+		do read || break 2; let l++
 		done
 
 		# Read values in all the indented lines beneath the name.
@@ -303,15 +308,15 @@ do
 			# Fail on a reset value in a non-cross-stream table.
 			! test $crossstream = 'yes' &&
 				test -z "${REPLY##*Reset*}" &&
-				err "fatal: kern reset in a non-cross-stream table"
+				err "fatal: kern reset in a non-cross-stream table (line $l)"
 
 			values=(${values[@]} ${line[@]})
 
-			read || break 2
+			read || break 2; let l++
 
 			# Skip blanks between the values, if any.
 			until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-			do read || break 3
+			do read || break 3; let l++
 			done
 		done
 	done
@@ -326,7 +331,7 @@ do
 		then
 			indexof $vlname ${vlnames[@]}
 			test $index -eq -1 &&
-				err "fatal: kern values not found: $vlname"
+				err "fatal: kern values not defined: $vlname (line ${lact[$i]})"
 			action=$index
 		fi
 
