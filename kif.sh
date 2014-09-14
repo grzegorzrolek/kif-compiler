@@ -85,7 +85,7 @@ read; let l++
 
 # Skip blank lines and line comments in front of the input file.
 until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-do read; let l++
+do read || break; let l++
 done
 
 # Read the file subtable by subtable to the end of file.
