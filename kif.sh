@@ -154,36 +154,17 @@ do
 		done
 	fi
 
-	let nclasses=4 # four built-in classes
+	unset nclasses
 
 	# Read classes until a state table header (indented line).
 	until test -z "${REPLY##[ 	]*}"
 	do
 		line=(${REPLY%%[ 	]\/\/*})
-
-		# See if the class continues after newline.
-		read
-
-		# Skip blanks and comments inbetween.
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read
-		done
-
-		# Join lines that do continue the class listing.
-		while test "${REPLY:0:1}" = '+'
-		do
-			linecont=(${REPLY%%[ 	]\/\/*})
-			test ${#linecont[@]} -gt 1 &&
-				line=(${line[@]} ${linecont[@]:1})
-
-			read
-
-			until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-			do read
-			done
-		done
-
-		clnames[${#clnames[@]}]=$line
+		if test $line != '+'
+		then
+			nclasses=${#clnames[@]}
+			clnames=(${clnames[@]} $line)
+		fi
 
 		for glyph in ${line[@]:1}
 		do
@@ -196,8 +177,16 @@ do
 			test $index -gt ${glend=$index} && glend=$index
 		done
 
-		let nclasses++
+		read
+
+		# Skip blanks and comments inbetween.
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read
+		done
 	done
+
+	# Update the number of classes for later use.
+	let nclasses++
 
 	# Set an Out-of-Bounds class on glyphs inbetween the specified ones.
 	for i in $(seq $glstart $glend)
