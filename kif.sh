@@ -157,6 +157,11 @@ do
 		# See if the class continues after newline.
 		read
 
+		# Skip blanks and comments inbetween.
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read
+		done
+
 		# Join lines that do continue the class listing.
 		while test "${REPLY:0:1}" = '+'
 		do
@@ -165,6 +170,10 @@ do
 				line=(${line[@]} ${linecont[@]:1})
 
 			read
+
+			until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+			do read
+			done
 		done
 
 		clnames[${#clnames[@]}]=$line
@@ -181,10 +190,6 @@ do
 		done
 
 		let nclasses++
-
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read
-		done
 	done
 
 	# Set an Out-of-Bounds class on glyphs inbetween the specified ones.
