@@ -55,6 +55,8 @@ indexof () {
 }
 
 
+eof="fatal: premature end of file"
+
 let tabhead=4+2*2*$v # Subtable header size
 let cloff=5*2*$v # Class table offset (length of a state table header)
 let clsize=1*$v # Size of the mapping entry
@@ -117,10 +119,10 @@ do
 		*) err "fatal: unknown kerning type: ${line[@]:1}";;
 	esac
 
-	read
+	read || err "$eof"
 
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read
+	do read || err "$eof"
 	done
 
 	line=(${REPLY%%[ 	]\/\/*})
@@ -132,10 +134,10 @@ do
 		*) err "fatal: bad orientation flag: ${line[@]:1}";;
 	esac
 
-	read
+	read || err "$eof"
 
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read
+	do read || err "$eof"
 	done
 
 	line=(${REPLY%%[ 	]\/\/*})
@@ -147,10 +149,10 @@ do
 			*) err "fatal: bad cross-stream flag: ${line[@]:1}";;
 		esac
 
-		read
+		read || err "$eof"
 
 		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read
+		do read || err "$eof"
 		done
 	fi
 
@@ -177,11 +179,11 @@ do
 			test $index -gt ${glend=$index} && glend=$index
 		done
 
-		read
+		read || err "$eof"
 
 		# Skip blanks and comments inbetween.
 		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read
+		do read || err "$eof"
 		done
 	done
 
@@ -198,11 +200,11 @@ do
 	test "${clnames[*]}" != "${line[*]}" &&
 		err "fatal: classes and state header don't match"
 
-	read
+	read || err "$eof"
 
 	# Skip blanks directly beneath the header.
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read
+	do read || err "$eof"
 	done
 
 	# Read the state table until a blank or indented line.
@@ -223,17 +225,17 @@ do
 			err "fatal: wrong entry count in state: $line"
 		states[${#states[@]}]="${state[@]}"
 
-		read
+		read || err "$eof"
 
 		# Skip line comments, but break on a blank line.
 		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
-		do read
+		do read || err "$eof"
 		done
 	done
 
 	# Skip any more blanks if necessary.
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read
+	do read || err "$eof"
 	done
 
 	# Check if the entry table header is as expected.
@@ -241,11 +243,11 @@ do
 	test "${line[*]}" != "GoTo Push? Advance? KernValues" &&
 		err "fatal: malformed entry table header"
 
-	read
+	read || err "$eof"
 
 	# Skip blanks beneath the header.
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read
+	do read || err "$eof"
 	done
 
 	# Read entries until a blank line, or an indent (the Font Tools way).
@@ -267,16 +269,16 @@ do
 		fladvance=(${fladvance[@]} ${line[@]:3:1})
 		actnames=(${actnames[@]} ${line[@]:4:1})
 
-		read
+		read || err "$eof"
 
 		# Skip comments, but break on a blank.
 		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
-		do read
+		do read || err "$eof"
 		done
 	done
 
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read
+	do read || err "$eof"
 	done
 
 	# Read values until the end of file or a next subtable header.
