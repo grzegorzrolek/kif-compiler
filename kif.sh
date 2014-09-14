@@ -77,6 +77,8 @@ printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 
 {
 
+read
+
 # Skip blank lines and line comments in front of the input file.
 until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 do read
@@ -115,7 +117,8 @@ do
 		*) err "fatal: unknown kerning type: ${line[@]:1}";;
 	esac
 
-	unset REPLY
+	read
+
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
@@ -128,7 +131,8 @@ do
 		*) err "fatal: bad orientation flag: ${line[@]:1}";;
 	esac
 
-	unset REPLY
+	read
+
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
@@ -141,7 +145,8 @@ do
 			*) err "fatal: bad cross-stream flag: ${line[@]:1}";;
 		esac
 
-		unset REPLY
+		read
+
 		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 		do read
 		done
@@ -202,8 +207,9 @@ do
 	test "${clnames[*]}" != "${header[*]}" &&
 		err "fatal: classes and state header don't match"
 
+	read
+
 	# Skip blanks directly beneath the header.
-	unset REPLY
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
@@ -244,8 +250,9 @@ do
 	test "${header[*]}" != "GoTo Push? Advance? KernValues" &&
 		err "fatal: malformed entry table header"
 
+	read
+
 	# Skip blanks beneath the header.
-	unset REPLY
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read
 	done
@@ -288,8 +295,9 @@ do
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
 
+		read || break
+
 		# Skip blanks beneath the kern list name.
-		unset REPLY
 		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 		do read || break 2
 		done
@@ -304,8 +312,9 @@ do
 
 			values=(${values[@]} ${REPLY%%[ 	]\/\/*})
 
+			read || break 2
+
 			# Skip blanks between the values, if any.
-			unset REPLY
 			until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 			do read || break 3
 			done
