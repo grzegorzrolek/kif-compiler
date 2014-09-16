@@ -54,6 +54,18 @@ indexof () {
 	index=-1
 }
 
+# Does the calculations for the bsearch header's $brange $bsel $bshift.
+bcalc () {
+	local usize=$1
+	local nunits=$2
+	bsel=0 # i.e., an exponent
+	while test $(( nunits >> bsel )) -gt 1
+	do let bsel++
+	done
+	brange=$(( usize * 2**bsel ))
+	bshift=$(( usize * (nunits - 2**bsel) ))
+}
+
 
 eof="fatal: premature end of file"
 l=0 # No. of line being parsed
@@ -356,6 +368,7 @@ do
 	then
 		# Filter out glyph segments for the class lookups.
 		i=$glstart
+		nsegments=0
 		while test $i -le $glend
 		do
 			class=${classes[$i]-1} # out-of-bounds if not set
@@ -376,13 +389,13 @@ do
 			done
 
 			clsegment=($i $first $class)
-			clsegments[${#clsegments[@]}]=${clsegment[@]}
-			let i++
+			clsegments[$nsegments]=${clsegment[@]}
+			let i++ nsegments++
 		done
 
 		let clhead=6*2 # Size of a binsearch lookup table header
 		let mapsize=2*2+$clsize # Mapping size
-		let nmappings=${#clsegments[@]}+1 # No. of mappings
+		let nmappings=$nsegments+1 # No. of mappings
 	else
 		let clhead=2*2 # Size of a trimmed array header
 		let mapsize=$clsize # Mapping size
@@ -434,23 +447,17 @@ do
 
 	if test $tag = 'kerx'
 	then
-		# Calculate the binsearch header data.
-		nunits=${#clsegments[@]}
-		exponent=0
-		while test $(( nunits >> exponent )) -gt 1
-		do let exponent++
-		done
-		srange=$(( mapsize * 2**exponent ))
-		rshift=$(( mapsize * (nunits - 2**exponent) ))
+		# Calculate the bsearch header from unit size and count.
+		bcalc $mapsize $nsegments
 
 		printf "\n"
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
 			$off 2 "Lookup format" \
 			$(( off += 2 )) $mapsize "Unit size" \
-			$(( off += 2 )) $nunits "No. of units" \
-			$(( off += 2 )) $srange "Search range" \
-			$(( off += 2 )) $exponent "Entry selector" \
-			$(( off += 2 )) $rshift "Range shift" && let off+=2
+			$(( off += 2 )) $nsegments "No. of units" \
+			$(( off += 2 )) $brange "Search range" \
+			$(( off += 2 )) $bsel "Entry selector" \
+			$(( off += 2 )) $bshift "Range shift" && let off+=2
 
 		for i in ${!clsegments[@]}
 		do
