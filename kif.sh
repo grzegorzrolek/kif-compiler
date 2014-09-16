@@ -192,11 +192,6 @@ do
 	# Update the number of classes for later use.
 	let nclasses++
 
-	# Set an Out-of-Bounds class on glyphs inbetween the specified ones.
-	for i in $(seq $glstart $glend)
-	do test "${classes[$i]}" || classes[$i]=1
-	done
-
 	# Check if the class list and state table header match.
 	line=(${REPLY%%[ 	]\/\/*})
 	test "${clnames[*]}" != "${line[*]}" &&
@@ -363,7 +358,7 @@ do
 		i=$glstart
 		while test $i -le $glend
 		do
-			class=${classes[$i]}
+			class=${classes[$i]-1} # out-of-bounds if not set
 
 			# Skip the out-of-bounds class.
 			if test $class -eq 1
@@ -376,7 +371,7 @@ do
 
 			# Skip to the last subsequent glyph with same class.
 			until test $i -eq $glend ||
-				test ${classes[(( i+1 ))]} -ne $class
+				test ${classes[(( i+1 ))]-1} -ne $class
 			do let i++
 			done
 
@@ -474,7 +469,7 @@ do
 
 		for i in $(seq $glstart $glend)
 		do
-			class=${classes[$i]}
+			class=${classes[$i]-1}
 			names="${glnames[$i]}: ${clnames[$class]}"
 			printf "\t<dataline offset=\"%08X\" hex=\"%02X\"/> <!-- %s -->\n" \
 				$off $class "$names" && let off+=$mapsize
