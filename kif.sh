@@ -66,6 +66,39 @@ bcalc () {
 	bshift=$(( usize * (nunits - 2**bsel) ))
 }
 
+# Finds segments within $luarr array and puts them in $lusegs[$lusegcount].
+lucollapse () {
+	local start=$1
+	local end=$2
+	local i=$start
+	lusegs=() # lookup segments
+	lusegcount=0
+	while test $i -le $end
+	do
+		unset value
+		local value=${luarr[$i]}
+
+		# Skip holes in the array.
+		if test -z "$value"
+		then
+			let i++
+			continue
+		fi
+
+		local first=$i
+
+		# Skip to the last subsequent slot with same value.
+		while test -n "${luarr[$((i+1))]}" &&
+			test ${luarr[$((i+1))]} -eq $value
+		do let i++
+		done
+
+		local segment=($i $first $value)
+		lusegs[$lusegcount]=${segment[@]}
+		let i++ lusegcount++
+	done
+}
+
 
 eof="fatal: premature end of file"
 l=0 # No. of line being parsed
@@ -107,11 +140,10 @@ do
 	vertical='no'
 	crossstream='no'
 	unset tabfmt # Subtable format
-	classes=() # GID-indexed array of classes
+	luarr=() # Glyph-to-class index lookup array
 	clnames=(EOT OOB DEL EOL) # Class names
 	unset glstart # First glyph assigned to a class
 	unset glend # Last glyph assigned to a class
-	clsegments=() # Class lookup segments (extended table only)
 	states=() # State records
 	stnames=() # State names
 	gotos=() # Next states
@@ -188,7 +220,7 @@ do
 			test $index ||
 				err "fatal: glyph not found: $glyph (line $l)"
 			let index-=$postoff
-			classes[$index]=$nclasses
+			luarr[$index]=$nclasses
 			test $index -lt ${glstart=$index} && glstart=$index
 			test $index -gt ${glend=$index} && glend=$index
 		done
@@ -367,35 +399,11 @@ do
 	if test $tag = 'kerx'
 	then
 		# Filter out glyph segments for the class lookups.
-		i=$glstart
-		nsegments=0
-		while test $i -le $glend
-		do
-			class=${classes[$i]-1} # out-of-bounds if not set
-
-			# Skip the out-of-bounds class.
-			if test $class -eq 1
-			then
-				let i++
-				continue
-			fi
-
-			first=$i
-
-			# Skip to the last subsequent glyph with same class.
-			until test $i -eq $glend ||
-				test ${classes[(( i+1 ))]-1} -ne $class
-			do let i++
-			done
-
-			clsegment=($i $first $class)
-			clsegments[$nsegments]=${clsegment[@]}
-			let i++ nsegments++
-		done
+		lucollapse $glstart $glend
 
 		let clhead=6*2 # Size of a binsearch lookup table header
 		let mapsize=2*2+$clsize # Mapping size
-		let nmappings=$nsegments+1 # No. of mappings
+		let nmappings=$lusegcount+1 # No. of mappings
 	else
 		let clhead=2*2 # Size of a trimmed array header
 		let mapsize=$clsize # Mapping size
@@ -448,23 +456,23 @@ do
 	if test $tag = 'kerx'
 	then
 		# Calculate the bsearch header from unit size and count.
-		bcalc $mapsize $nsegments
+		bcalc $mapsize $lusegcount
 
 		printf "\n"
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
 			$off 2 "Lookup format" \
 			$(( off += 2 )) $mapsize "Unit size" \
-			$(( off += 2 )) $nsegments "No. of units" \
+			$(( off += 2 )) $lusegcount "No. of units" \
 			$(( off += 2 )) $brange "Search range" \
 			$(( off += 2 )) $bsel "Entry selector" \
 			$(( off += 2 )) $bshift "Range shift" && let off+=2
 
-		for i in ${!clsegments[@]}
+		for i in ${!lusegs[@]}
 		do
-			s=(${clsegments[i]})
+			s=(${lusegs[i]})
 			names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
 			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-				$off ${clsegments[i]} "$names" && let off+=$mapsize
+				$off ${lusegs[i]} "$names" && let off+=$mapsize
 		done
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
 			$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$mapsize
@@ -476,7 +484,7 @@ do
 
 		for i in $(seq $glstart $glend)
 		do
-			class=${classes[$i]-1}
+			class=${luarr[$i]-1}
 			names="${glnames[$i]}: ${clnames[$class]}"
 			printf "\t<dataline offset=\"%08X\" hex=\"%02X\"/> <!-- %s -->\n" \
 				$off $class "$names" && let off+=$mapsize
