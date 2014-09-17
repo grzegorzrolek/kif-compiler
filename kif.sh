@@ -523,28 +523,31 @@ do
 		goto=${gotos[$i]}
 		action=${actions[$i]}
 
-		# Use byte offsets for the old table.
-		test $tag = 'kerx' || let goto=$stoff+$goto*$nclasses
+		flags=0
+		test ${flpush[$i]} = 'yes' && let flags+=16#8000
+		test ${fladvance[$i]} = 'yes' || let flags+=16#4000
 
-		flact=0 # flags plus action
-		test ${flpush[$i]} = 'yes' && let flact+=16#8000
-		test ${fladvance[$i]} = 'yes' || let flact+=16#4000
-		test $tag = 'kerx' && (( flact <<= 16 ))
-
-		if test $action -ge 0
+		if test $tag = 'kerx'
 		then
-			vlindex=${vlindices[$action]}
-
-			if test $tag = 'kerx'
-			then let flact+=$vlindex+${eolmarks[$action]}
-			else let flact+=$vloff+$vlindex*$vlsize
+			if test $action -ge 0
+			then
+				let vlindex=${vlindices[$action]}+${eolmarks[$action]}
+			else
+				let vlindex=16#FFFF
 			fi
-		else
-			test $tag = 'kerx' && let flact+=16#FFFF
-		fi
 
-		printf "\t<dataline offset=\"%08X\" hex=\"%04X %0*X\"/> <!-- %02X %s -->\n" \
-			$off $goto $(( 4*v )) $flact $i ${gtnames[$i]} && let off+=$etsize
+			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %02X %s -->\n" \
+				$off $goto $flags $vlindex $i ${gtnames[$i]} && let off+=$etsize
+		else
+			# Use byte offsets for the old table.
+			let goto=$stoff+$goto*$nclasses
+
+			test $action -ge 0 &&
+				let flags+=$vloff+${vlindices[$action]}*$vlsize
+
+			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X\"/> <!-- %02X %s -->\n" \
+				$off $goto $flags $i ${gtnames[$i]} && let off+=$etsize
+		fi
 	done
 
 	test $etpad -ne 0 &&
