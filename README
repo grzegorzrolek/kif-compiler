@@ -49,13 +49,13 @@ Subtable header is shortened to Type and Orientation, both required
 fields. These are supplemented with additional Cross-stream flag of a
 yes/no value that defaults to 'no':
 
-Type Contextual
+Type Contextual/Attachment
 Orientation H/V
 Cross-stream yes/no
 
-Entry table swaps the Mark flag for a Push flag, which pushes current
-glyph onto the kern stack. It also has a single action, KernValues, that
-gives the name of a list of kern values to apply on the stack:
+In the contextual kerning subtable, the entry table has a Push? flag,
+which pushes the current glyph onto the kern stack, and a single action,
+KernValues, that names the list of kern values to apply on the stack:
 
     GoTo        Push?   Advance?    KernValues
 1   StateName   yes/no  yes/no      ListName/none
@@ -72,17 +72,57 @@ For the cross-stream kerning subtables, a special value, Reset, can be
 used within the list of values. It makes the glyph to which it is
 applied be reset to baseline from any accumulated cross-stream kern.
 
+In the attachment positioning subtable, there's the usual Mark? flag,
+which marks the current glyph for later use, and one of the three
+possible types of actions: MatchPoints, MatchAnchors, or MatchCoords:
+
+    GoTo        Mark?   Advance?    MatchPoints
+1   StateName   yes/no  yes/no      PointSetName/none
+2   ...
+
+    GoTo        Mark?   Advance?    MatchAnchors
+1   StateName   yes/no  yes/no      AnchorSetName/none
+2   ...
+
+    GoTo        Mark?   Advance?    MatchCoords
+1   StateName   yes/no  yes/no      CoordSetName/none
+2   ...
+
+Each type declares if the values are to be interpreted as control point
+indices, anchor indices, or pairs of coordinates, and each refers to a
+set of both marked and current glyph values that define the match point.
+These are defined last, and take a form respective to the action type:
+
+PointSetName
+    Marked PointIndex
+    Current PointIndex
+
+AnchorSetName
+    Marked AnchorIndex
+    Current AnchorIndex
+
+CoordSetName
+    Marked XCoord YCoord
+    Current XCoord YCoord
+
+For each type, the points the values resolve to within a given glyph
+space are used to align the current glyph to the marked one so that the
+points in both glyphs match.
+
 This concludes a subtable. Please see the accompanying example directory
 for a working example and more commentary.
 
 
 LIMITATIONS
 
-For now, only contextual kerning subtables are available. Moreover, the
-recently found 'kerx' extended kerning table is not fully documented,
-so consider the code produced as being in part reverse-engineered with
-all the usual caveats. In case any issues should arise, a regular 'kern'
-table works well in CoreText on both OS X and iOS.
+For now, only the two, both state machine-based subtables for contextual
+kerning and attachment are available to use. Moreover, the relatively
+recent attachment positioning can be used within the 'kerx' table only.
+
+The 'kerx' extended kerning table is not fully documented, so consider
+the code produced as being in part reverse-engineered with all the usual
+caveats. In case any issues should arise, a regular 'kern' table works
+well in CoreText on both OS X and iOS.
 
 Specifying kerning variations, part of the TrueType Variations
 technology found originally in AAT, is also currently not available.

@@ -139,7 +139,7 @@ do
 
 	vertical='no'
 	crossstream='no'
-	unset tabfmt # Subtable format
+	unset tabfmt acttype # Subtable format and action type
 	luarr=() # Glyph-to-class index lookup array
 	clnames=(EOT OOB DEL EOL) # Class names
 	unset glstart # First glyph assigned to a class
@@ -155,6 +155,7 @@ do
 	values=() # Kerning values
 	vlnames=() # Names of the kern value lists
 	vlindices=() # Indexes of values beginning the lists
+	vlpack=1 # No. of values per record; depends on table format
 
 	# Parse the input line, comments excluded.
 	line=(${REPLY%%[ 	]\/\/*})
@@ -162,8 +163,12 @@ do
 		err "fatal: kerning type expected (line $l)"
 	case ${line[@]:1} in
 		Contextual) tabfmt=1;;
+		Attachment) tabfmt=4;;
 		*) err "fatal: unknown kerning type: ${line[@]:1} (line $l)";;
 	esac
+
+	test $tabfmt -eq 4 -a $tag != 'kerx' &&
+		err "fatal: attachment allowed in 'kerx' table only (line $l)"
 
 	read || err "$eof"; let l++
 
@@ -281,8 +286,18 @@ do
 
 	# Check if the entry table header is as expected.
 	line=(${REPLY%%[ 	]\/\/*})
-	test "${line[*]}" != "GoTo Push? Advance? KernValues" &&
-		err "fatal: malformed entry table header (line $l)"
+	if test $tag = 'kerx' -a $tabfmt -eq 4
+	then
+		case "${line[*]}" in
+			"GoTo Mark? Advance? MatchPoints") acttype=1; vlpack=2;;
+			"GoTo Mark? Advance? MatchAnchors") acttype=2; vlpack=2;;
+			"GoTo Mark? Advance? MatchCoords") acttype=4; vlpack=4;;
+			*) err "fatal: malformed entry table header (line $l)";;
+		esac
+	else
+		test "${line[*]}" != "GoTo Push? Advance? KernValues" &&
+			err "fatal: malformed entry table header (line $l)"
+	fi
 
 	read || err "$eof"; let l++
 
@@ -339,6 +354,43 @@ do
 		do read || break 2; let l++
 		done
 
+		if test $tabfmt -eq 4
+		then
+			# Expect specific value count in each attachment type.
+			case $acttype in
+				1) nvlreq=1;; # one point per glyph
+				2) nvlreq=1;; # one anchor per glyph
+				4) nvlreq=2;; # two coordinates per glyph
+			esac
+
+			# Read values for both marked and current glyphs.
+			for field in Marked Current
+			do
+				line=(${REPLY%%[ 	]\/\/*})
+				test $line != "${field}" &&
+					err "fatal: values for $field glyph expected (line $l)"
+				test ${#line[@]} -ne $(( nvlreq + 1 )) &&
+					err "fatal: wrong number of values (line $l)"
+
+				values=(${values[@]} ${line[@]:1})
+
+				read || if test $field = 'Marked'
+					then err "$eof"
+					else break; let l++
+					fi
+
+				until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+				do read || if test $field = 'Marked'
+					then err "$eof"
+					else break 2; let l++
+					fi
+				done
+			done
+
+			# Don't bother with other formats at this point.
+			continue
+		fi
+
 		# Read values in all the indented lines beneath the name.
 		while test -z "${REPLY##[ 	]*}"
 		do
@@ -378,7 +430,7 @@ do
 	done
 
 	# Pre-compute the end-of-list marker count prior to each action.
-	if test $tag = 'kerx'
+	if test $tag = 'kerx' -a $tabfmt -eq 1
 	then
 		eolmarks=() # Marker count, action-indexed
 		previndex=0
@@ -420,7 +472,7 @@ do
 	let etpad=$etlen/$v%2*$v # Padding
 	let vloff=$etoff+$etlen+$etpad # Kern values offset
 	let vllen=${#values[@]}*$vlsize # Values length
-	test $tag = 'kerx' &&
+	test $tag = 'kerx' -a $tabfmt -eq 1 &&
 		let vllen+=\($nmarks+1\)*$vlsize # the end-of-list markers
 	let vlpad=$vllen/$v%2*$v # Padding
 	let tablen=$tabhead+$vloff+$vllen+$vlpad # Subtable length
@@ -444,6 +496,8 @@ do
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
 		$off $(( 4*v )) 0 "Variation tuple index" && let off+=2*$v
+
+	test $acttype && vloff=$(( vloff + (acttype << 29) ))
 
 	printf "\n"
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
@@ -531,7 +585,13 @@ do
 		then
 			if test $action -ge 0
 			then
-				let vlindex=${vlindices[$action]}+${eolmarks[$action]}
+				let vlindex=${vlindices[$action]}
+				if test $tabfmt -eq 4
+				then
+					let vlindex/=$vlpack
+				else
+					let vlindex+=${eolmarks[$action]}
+				fi
 			else
 				let vlindex=16#FFFF
 			fi
@@ -577,14 +637,17 @@ do
 				let value-=$value%2
 
 				# Set the list-end flag for the last value in a list.
-				test $(( ++val )) -eq $nextval && let value+=1
+				test $(( val + 1 )) -eq $nextval && let value+=1
 			fi
 
 			printf "%04X " $value && let off+=$vlsize
 
 			# Place an end-of-list marker for the extended table.
-			test $tag = 'kerx' && test $(( ++val )) -eq $nextval &&
+			test $tag = 'kerx' -a $tabfmt -eq 1 &&
+				test $(( val + 1 )) -eq $nextval &&
 				printf "%04X" $(( 16#FFFF )) && let off+=$vlsize
+
+			let val++
 		done
 
 		printf "\"/> <!-- %s -->\n" ${vlnames[$i]}
