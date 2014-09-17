@@ -43,9 +43,9 @@ glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post)
 
 # Fills $index with index of a token within the list following the token.
 indexof () {
-	index=0
-	token=$1
+	local token=$1
 	shift
+	index=0
 	for item
 	do
 		test $token = $item && return
