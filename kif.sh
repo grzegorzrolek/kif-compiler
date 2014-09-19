@@ -101,7 +101,13 @@ lucollapse () {
 
 
 eof="fatal: premature end of file"
+
+{
+
 l=0 # No. of line being parsed
+
+printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
+printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
 let tabhead=4+2*2*$v # Subtable header size
 let cloff=5*2*$v # Class table offset (length of a state table header)
@@ -110,22 +116,19 @@ let trsize=1*$v # Transition size
 let etsize=2+2*$v # Full entry size in the entry table
 let vlsize=2 # Value size
 
-printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
-printf "<genericSFNTTable tag=\"%s\">\n" $tag
+off=0 # Current offset into the table
 
-# Print the table header before reading actual subtables.
+# Scan the input file for a number of subtables.
 ntables=$(grep -c '^Type[ 	]' $2)
-off=0 # current offset into the table
 
+# Print the table header before reading subtables.
 printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
 	$off $v 0 "Table version" && let off+=4
 
 printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 	$off $ntables "No. of subtables" && let off+=4
 
-
-{
-
+# Read the first line.
 read; let l++
 
 # Skip blank lines and line comments in front of the input file.
@@ -659,7 +662,8 @@ do
 
 done
 
+printf "\n</genericSFNTTable>\n"
+
 } <$2
 
-printf "\n</genericSFNTTable>\n"
 exit
