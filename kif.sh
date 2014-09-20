@@ -4,7 +4,7 @@
 # Copyright 2013 Grzegorz Rolek
 
 
-usage="usage: $(basename $0) [-x] <post.xml> <kern.kif>"
+usage="usage: $(basename $0) [-x] [-a <ankr.xml>] <post.xml> <kern.kif>"
 
 # Prints a message to stderr and exits.
 err () {
@@ -13,7 +13,7 @@ err () {
 }
 
 # Parse and reset the arguments.
-args=$(getopt x $*)
+args=$(getopt xa: $*)
 test $? -ne 0 &&
 	err "$usage" 2
 set -- $args
@@ -23,6 +23,7 @@ for i
 do
 	case "$i" in
 		-x) tag='kerx'; v=2; shift;;
+		-a) ankfile=$2; shift 2;;
 		--) shift; break;;
 	esac
 done
@@ -30,6 +31,8 @@ done
 # Make sure both file arguments are given.
 test $# != 2 &&
 	err "$usage" 2
+
+test $ankfile || ankfile="ankr.xml"
 
 post=$1 # Path to the 'post' table dump
 
@@ -106,6 +109,247 @@ eof="fatal: premature end of file"
 
 l=0 # No. of line being parsed
 
+# Read the first line.
+read; let l++
+
+# Skip blank lines and line comments in front of the input file.
+until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+do read || break; let l++
+done
+
+# See if there's any anchor listing before the first subtable.
+if test "$REPLY" -a "${REPLY##Type[ 	]*}"
+then
+
+	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n" >$ankfile
+	printf "<genericSFNTTable tag=\"ankr\">\n" >>$ankfile
+
+	off=0 # Current offset into the table
+
+	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
+		$off 0 "Table version" \
+		$(( off += 2 )) 0 "Flags" >>$ankfile && let off+=2
+
+	let luoff=12 # Lookup table offset, constant
+	let luhead=6*2 # Size of a bsearch lookup table header
+	let lusize=2 # Size of the anchor offset lookup entry
+	let mapsize=2*2+$lusize # Mapping size
+
+	unset glstart glend # First/last glyph with a class assigned
+	luarr=() # Glyph-to-class index lookup array
+	clnames=() # Class names
+	clrefs=() # Class names in order of reference
+	anknames=() # Anchor names
+	anchors=() # Anchor coordinates
+	clrefunique=() # Unique class names in order of reference
+	clrefcount=() # No. of anchors for a given class
+	ankindices=() # Indices of anchors that start each new class
+	sortedindices=() # Indices of anchors sorted by class they reference
+
+	unset nclasses
+
+	# Read classes until the beginning of the anchor list.
+	until test -z "${REPLY##AnchorList*}"
+	do
+		line=(${REPLY%%[ 	]\/\/*})
+		if test $line != '+'
+		then
+			nclasses=${#clnames[@]}
+			clnames=(${clnames[@]} $line)
+		fi
+
+		for glyph in ${line[@]:1}
+		do
+			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
+			test $index ||
+				err "fatal: glyph not found: $glyph (line $l)"
+			let index-=$postoff
+			luarr[$index]=$nclasses
+			test $index -lt ${glstart=$index} && glstart=$index
+			test $index -gt ${glend=$index} && glend=$index
+		done
+
+		read || err "$eof"; let l++
+
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read || err "$eof"; let l++
+		done
+	done
+
+	# Update the number of classes for later use.
+	let nclasses++
+
+	read || err "$eof"; let l++
+
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+	do read || err "$eof"; let l++
+	done
+
+	# Read anchors until the end of file or the first subtable header.
+	ankindex=0
+	until test -z "$REPLY" -o -z "${REPLY##Type[ 	]*}"
+	do
+		line=(${REPLY%%[ 	]\/\/*})
+		anknames=(${anknames[@]} $line)
+
+		read || break; let l++
+
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read || break 2; let l++
+		done
+
+		line=(${REPLY%%[ 	]\/\/*})
+		test $line != "GlyphClass" &&
+			err "fatal: anchor glyph class expected (line $l)"
+		clrefs[$ankindex]=${line[@]:1}
+
+		read || break; let l++
+
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read || break 2; let l++
+		done
+
+		line=(${REPLY%%[ 	]\/\/*})
+		test $line != "Coords" &&
+			err "fatal: anchor coordinates expected (line $l)"
+		test ${#line[@]} -ne 3 &&
+			err "fatal: wrong number of coordinates (line $l)"
+		anchors=(${anchors[@]} ${line[@]:1})
+
+		let ankindex++
+
+		read || break 2; let l++
+
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read || break 3; let l++
+		done
+	done
+
+	# Filter out unique class names as referenced by anchors.
+	clrefindex=0
+	for clref in ${clrefs[@]}
+	do
+		indexof $clref ${clrefunique[@]}
+		if test $index -eq -1
+		then
+			clrefunique=(${clrefunique[@]} $clref)
+			clrefcount[$clrefindex]=0
+			let index=$clrefindex
+			let clrefindex++
+		fi
+		clrefcount[$index]=$(( ${clrefcount[$index]} + 1 ))
+	done
+
+	# Record indices of anchors that start a new associated class.
+	ankindex=0
+	for i in ${!clrefunique[@]}
+	do
+		ankindices[$i]=$ankindex
+		let ankindex+=${clrefcount[$i]}
+	done
+
+	# Sort indices of anchors by the class they reference.
+	sortedindex=0
+	for i in ${!clrefunique[@]}
+	do
+		clref=${clrefunique[$i]}
+		for j in ${!clrefs[@]}
+		do
+			indexof $clref ${clrefs[@]}
+			if test $clref = ${clrefs[$j]}
+			then
+				sortedindices[$sortedindex]=$j
+				let sortedindex++
+			fi
+		done
+	done
+
+	# Remove unused classes from lookup array, if any.
+	i=$glstart
+	while test $i -le $glend
+	do
+		clname=${clnames[${luarr[$i]}]}
+		indexof $clname ${clrefunique[@]}
+		test $index -eq -1 &&
+			luarr[$i]=""
+		let i++
+	done
+
+	# Filter out segments from the lookup array.
+	lucollapse $glstart $glend
+
+	let nmappings=$lusegcount+1 # No. of mappings
+	let lulen=$luhead+$nmappings*$mapsize # Lookup table length
+	let lupad=$lulen/2%2*2 # Padding
+	let ankoff=$luoff+$lulen+$lupad # Anchor table offset
+
+	printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
+		$off $luoff "Anchor lookup offset" \
+		$(( off += 4 )) $ankoff "Anchors offset" >>$ankfile && let off+=4
+
+	# Calculate the bsearch header data.
+	bcalc $mapsize $lusegcount
+
+	printf "\n" >>$ankfile
+	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
+		$off 2 "Lookup format" \
+		$(( off += 2 )) $mapsize "Unit size" \
+		$(( off += 2 )) $lusegcount "No. of units" \
+		$(( off += 2 )) $brange "Search range" \
+		$(( off += 2 )) $bsel "Entry selector" \
+		$(( off += 2 )) $bshift "Range shift" >>$ankfile && let off+=2
+
+	for i in ${!lusegs[@]}
+	do
+		s=(${lusegs[$i]}) # Segment of a class as defined
+
+		# Translate the class as defined to a class as referenced.
+		indexof ${clnames[${s[2]}]} ${clrefunique[@]}
+
+		let ankoffset=${ankindices[$index]}*4+$index*4
+		names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clrefunique[$index]}"
+		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
+			$off ${s[0]} ${s[1]} $ankoffset "$names" >>$ankfile && let off+=$mapsize
+	done
+	printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
+		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" >>$ankfile && let off+=$mapsize
+
+	# Pad the anchor lookups with zeros for word-alignment if necessary.
+	test $lupad -ne 0 &&
+		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
+			$off $(( lupad * 2 )) 0 >>$ankfile && let off+=$lupad
+
+	a=0 # Current anchor index
+	let nanchors=${#anchors[@]}/2 # No. of all the anchors
+	printf "\n" >>$ankfile
+	for i in ${!clrefunique[@]}
+	do
+		let nclanchors=${clrefcount[$i]} # No. of anchors in a class
+		printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
+			$off $nclanchors ${clrefunique[$i]} >>$ankfile && let off+=4
+
+		val=0 # Current, in a class, coordinate value index
+		while test $(( val / 2 )) -lt $nclanchors
+		do
+			let index=${sortedindices[$a]}*2
+			xval=${anchors[$index]}
+			yval=${anchors[$(( $index + 1 ))]}
+			let val+=2
+
+			# Make a 2's complement for a negative value.
+			test $xval -lt 0 && let xval=16#10000+$xval
+			test $yval -lt 0 && let yval=16#10000+$yval
+
+			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X\"/> <!-- %s -->\n" \
+				$off $xval $yval ${anknames[${sortedindices[$a]}]} >>$ankfile && let off+=4
+
+			let a++
+		done
+	done
+
+	printf "</genericSFNTTable>\n" >>$ankfile
+fi
+
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
@@ -127,14 +371,6 @@ printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
 
 printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 	$off $ntables "No. of subtables" && let off+=4
-
-# Read the first line.
-read; let l++
-
-# Skip blank lines and line comments in front of the input file.
-until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-do read || break; let l++
-done
 
 # Read the file subtable by subtable to the end of file.
 while test "$REPLY" -a -z "${REPLY##Type[ 	]*}"
@@ -372,10 +608,30 @@ do
 				line=(${REPLY%%[ 	]\/\/*})
 				test $line != "${field}" &&
 					err "fatal: values for $field glyph expected (line $l)"
-				test ${#line[@]} -ne $(( nvlreq + 1 )) &&
-					err "fatal: wrong number of values (line $l)"
 
-				values=(${values[@]} ${line[@]:1})
+				if test $acttype -eq 2
+				then
+					ankname=${line[@]:1}
+					indexof $ankname ${anknames[@]}
+					test $index -eq -1 &&
+						err "fatal: anchor not defined: $ankname (line: $l)"
+					ankclass=${clrefs[$index]}
+
+					# Check the index the anchors' at in its class.
+					i=0
+					ankindex=0
+					while test $i -lt $index
+					do
+						test $ankclass = ${clrefs[$i]} &&
+							let ankindex++
+						let i++
+					done
+					values=(${values[@]} $ankindex)
+				else
+					test ${#line[@]} -ne $(( nvlreq + 1 )) &&
+						err "fatal: wrong number of values (line $l)"
+					values=(${values[@]} ${line[@]:1})
+				fi
 
 				read || if test $field = 'Marked'
 					then err "$eof"
