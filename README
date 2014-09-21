@@ -15,15 +15,26 @@ ftxdumperfuser --table post --output post.xml font.ttf
 
 Having both the 'post' dump and your kerning file in place, simply run:
 
-kif.sh post.xml kern.kif >kerx.xml
+kif.sh post.xml kerning.kif >kerx.xml
 
 That will make a file full of hex code for your kerning table, that can
 be now fused into the font, again with the Font Tools:
 
 ftxdumperfuser --table kerx --generic --datafile kerx.xml font.ttf
 
-Hex code in the kern data file is nicely formatted and commented, what
-can be of much help in case something goes wrong in the process.
+In case you'd want to use anchor-based attachment in your kerning file,
+you'll need a separate 'ankr' font table, that can be defined in a
+variant of the input file, and built with an -a flag to the compiler:
+
+kif.sh -a post.xml anchors.kif >ankr.xml
+
+Fuse it into the font in a way similar to the kerning table itself:
+
+ftxdumperfuser --table ankr --generic --datafile ankr.xml font.ttf
+
+Hex code produced for both the kerning and anchor data files is nicely
+formatted and commented, what can be of much help in case something goes
+wrong in the process.
 
 
 THE KIF FILE FORMAT
@@ -100,8 +111,32 @@ For each type, the points the values resolve to within a given glyph
 space are used to align the current glyph to the marked one so that the
 points in both glyphs match.
 
-This concludes a subtable. Please see the accompanying example directory
-for a working example and more commentary.
+This concludes a subtable and the main part of the KIF syntax. For the
+anchor table that's used with anchor-based positioning, a separate input
+file is needed. It's a simple list of anchors in the following format.
+
+Right at the top of the file there are the usual glyph classes as found
+in other input files of AAT. These could, in fact, be reused verbatim
+from the subtables in the kerning file the anchors are to be used with.
+
+Below lies a header, AnchorList, separating the classes from the list of
+anchors. Now anchors are just pairs of coordinates grouped under the
+names of the respective glyph classes. Referred class name goes up front
+on its own line, and the coordinates on the indented lines beneath:
+
+AnchorList
+
+ClassName
+    XCoord YCoord
+    XCoord YCoord
+    ...
+
+ClassName
+    XCoord YCoord
+    ...
+
+That's all that goes into the anchor input file. Please see the
+accompanying example directory for some examples and more commentary.
 
 
 LIMITATIONS

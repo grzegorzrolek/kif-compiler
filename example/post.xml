@@ -46,5 +46,14 @@
 		<PostScriptName glyphRefID="3" NameString="Aacute" />
 		<PostScriptName glyphRefID="4" NameString="Agrave" />
 		<PostScriptName glyphRefID="5" NameString="L" />
+		<PostScriptName glyphRefID="6" NameString="a" />
+		<PostScriptName glyphRefID="7" NameString="e" />
+		<PostScriptName glyphRefID="8" NameString="i" />
+		<PostScriptName glyphRefID="9" NameString="o" />
+		<PostScriptName glyphRefID="10" NameString="u" />
+		<PostScriptName glyphRefID="11" NameString="acutecmb" />
+		<PostScriptName glyphRefID="12" NameString="gravecmb" />
+		<PostScriptName glyphRefID="13" NameString="cedillacmb" />
+		<PostScriptName glyphRefID="14" NameString="ogonekcmb" />
 </postTable>
 
