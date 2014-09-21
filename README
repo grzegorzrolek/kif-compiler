@@ -15,19 +15,10 @@ ftxdumperfuser --table post --output post.xml font.ttf
 
 Having both the 'post' dump and your kerning file in place, simply run:
 
-kif.sh post.xml kern.kif >kern.xml
+kif.sh post.xml kern.kif >kerx.xml
 
 That will make a file full of hex code for your kerning table, that can
 be now fused into the font, again with the Font Tools:
-
-ftxdumperfuser --table kern --generic --datafile kern.xml font.ttf
-
-You can also produce the new 'kerx' extended kerning table by running
-the compiler with an -x option:
-
-kif.sh -x post.xml kern.kif >kerx.xml
-
-In that case, the fuse command will have to be modified accordingly:
 
 ftxdumperfuser --table kerx --generic --datafile kerx.xml font.ttf
 
@@ -121,8 +112,9 @@ recent attachment positioning can be used within the 'kerx' table only.
 
 The 'kerx' extended kerning table is not fully documented, so consider
 the code produced as being in part reverse-engineered with all the usual
-caveats. In case any issues should arise, a regular 'kern' table works
-well in CoreText on both OS X and iOS.
+caveats. In case any issues should arise, an -l option to the compiler
+will produce the legacy 'kern' table that's still supported in CoreText
+on both OS X and iOS.
 
 Specifying kerning variations, part of the TrueType Variations
 technology found originally in AAT, is also currently not available.

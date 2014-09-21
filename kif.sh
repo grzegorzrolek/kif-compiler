@@ -4,7 +4,7 @@
 # Copyright 2013 Grzegorz Rolek
 
 
-usage="usage: $(basename $0) [-x] <post.xml> <kern.kif>"
+usage="usage: $(basename $0) [-l] <post.xml> <kern.kif>"
 
 # Prints a message to stderr and exits.
 err () {
@@ -13,16 +13,16 @@ err () {
 }
 
 # Parse and reset the arguments.
-args=$(getopt x $*)
+args=$(getopt l $*)
 test $? -ne 0 &&
 	err "$usage" 2
 set -- $args
 
-tag='kern'; v=1 # Table version, 'kern' by default
+tag='kerx'; v=2 # Table version, 'kerx' by default
 for i
 do
 	case "$i" in
-		-x) tag='kerx'; v=2; shift;;
+		-l) tag='kern'; v=1; shift;;
 		--) shift; break;;
 	esac
 done
