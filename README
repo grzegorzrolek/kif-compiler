@@ -1,111 +1,120 @@
-KERNING INPUT FILE COMPILER
+Kerning Input File compiler for AAT
+===================================
 
-This is a pretty raw compiler for the Kerning Input File, a text file to
-kern fonts in TrueType AAT. Its output is a hex code for the state
-machine kerning table that you fuse into a font with OS X Font Tools.
+This is a pretty rough compiler for the Kerning Input File, a text file
+to kern fonts in TrueType AAT. Its output is a hex code for the state
+machine-based kerning and anchor positioning tables that you fuse into a
+font with [OS X Font Tools][1].
 
 
-REQUIREMENTS & USAGE
+Requirements & Usage
+--------------------
 
-You'll need a dump of your font's 'post' table first. It will be used to
-lookup the glyph names, so the table has to be in a format that actually
-lists those. Produce the dump with OS X Font Tools by running:
+You'll need a dump of your font's `post` table first. It will be used to
+lookup the glyph names, so the `post` table has to be in a format that
+actually has the names. Produce the dump with the Font Tools by running:
 
-ftxdumperfuser --table post --output post.xml font.ttf
+    ftxdumperfuser --table post --output post.xml font.ttf
 
-Having both the 'post' dump and your kerning file in place, simply run:
+Having both the `post.xml` dump and your kerning file in place, run:
 
-kif.sh post.xml kerning.kif >kerx.xml
+    ./kif.sh post.xml kerning.kif >kerx.xml
 
-That will make a file full of hex code for your kerning table, that can
-be now fused into the font, again with the Font Tools:
+That will make a `kerx.xml` file full of hex code for your kerning
+table, that can be now fused into the font, again with the Font Tools:
 
-ftxdumperfuser --table kerx --generic --datafile kerx.xml font.ttf
+    ftxdumperfuser --table kerx --generic --datafile kerx.xml font.ttf
 
 In case you'd want to use anchor-based attachment in your kerning file,
-you'll need a separate 'ankr' font table, that can be defined in a
-variant of the input file, and built with an -a flag to the compiler:
+you'll need an extra `ankr` font table with the anchor data. You can
+build it with a dedicated input file and an `-a` option to the compiler:
 
-kif.sh -a post.xml anchors.kif >ankr.xml
+    ./kif.sh -a post.xml anchors.kif >ankr.xml
 
-Fuse it into the font in a way similar to the kerning table itself:
+Then fuse it into the font in a way similar to the kerning table itself:
 
-ftxdumperfuser --table ankr --generic --datafile ankr.xml font.ttf
+    ftxdumperfuser --table ankr --generic --datafile ankr.xml font.ttf
 
 Hex code produced for both the kerning and anchor data files is nicely
 formatted and commented, what can be of much help in case something goes
 wrong in the process.
 
 
-THE KIF FILE FORMAT
+The KIF file format
+-------------------
 
-Kerning Input File, although it once had a mention in Font Tools docs,
-hasn't apparently been published by Apple. Here is a reconstruction
-of the format based on Morph Input File, a related format still in use.
+Kerning Input File hasn't apparently been published by Apple, although
+it had once a mention in the manual for OS X Font Tools. Here what
+follows is a pretty straightforward approximation of the format based on
+the Morph Input File, a related format still in use. If you've ever
+worked with MIF, the following will look familiar; if not, please see
+the relevant chapter in the OS X Font Tools documentation first.
 
-Parts common to all AAT state machines, i.e., the class listing and the
-state table, follow the MIF syntax literally; the rest is modified to
-handle the specifics of the kerning table as follows.
+Kerning table in AAT is a sequence of subtables with different types of
+data. Each subtable has a header with two required fields, `Type` and
+`Orientation`, and one optional `Cross-stream` field having a `yes`/`no`
+value that defaults to `no` if the field is omitted:
 
-Subtable header is shortened to Type and Orientation, both required
-fields. These are supplemented with additional Cross-stream flag of a
-yes/no value that defaults to 'no':
+    Type Contextual/Attachment
+    Orientation H/V
+    Cross-stream yes/no
 
-Type Contextual/Attachment
-Orientation H/V
-Cross-stream yes/no
+Both class lookup and the state table have the same form throughout all
+of the state machines in AAT, so their syntax follow the MIF literally.
+Modified are the entry table and the actions that follow, as to meet the
+requirements of the kerning table. The differences are described below.
 
-In the contextual kerning subtable, the entry table has a Push? flag,
-which pushes the current glyph onto the kern stack, and a single action,
-KernValues, that names the list of kern values to apply on the stack:
+In the contextual kerning subtable, entries have a `Push?` flag, which
+pushes the current glyph onto the kern stack, and a single action,
+`KernValues`, that names the list of kern values to apply on the stack:
 
-    GoTo        Push?   Advance?    KernValues
-1   StateName   yes/no  yes/no      ListName/none
-2   ...
+        GoTo        Push?   Advance?    KernValues
+    1   StateName   yes/no  yes/no      ListName/none
+    2   ...
 
 Lists of values follow, each with a name on its own line, and the values
 indented on the line beneath. Each value is applied to the kern stack
 in order of popping the stack glyph by glyph until the list is consumed:
 
-ListName
-    KernValue KernValue ...
+    ListName
+        KernValue KernValue ...
 
-For the cross-stream kerning subtables, a special value, Reset, can be
+For the cross-stream kerning subtables, a special value, `Reset`, can be
 used within the list of values. It makes the glyph to which it is
 applied be reset to baseline from any accumulated cross-stream kern.
 
-In the attachment positioning subtable, there's the usual Mark? flag,
-which marks the current glyph for later use, and one of the three
-possible types of actions: MatchPoints, MatchAnchors, or MatchCoords:
+In the attachment positioning subtable, there's the usual `Mark?` flag,
+which marks the current glyph for later use, and one of three possible
+types of actions: `MatchPoints`, `MatchAnchors`, and `MatchCoords`:
 
-    GoTo        Mark?   Advance?    MatchPoints
-1   StateName   yes/no  yes/no      PointSetName/none
-2   ...
+        GoTo        Mark?   Advance?    MatchPoints
+    1   StateName   yes/no  yes/no      PointSetName/none
+    2   ...
 
-    GoTo        Mark?   Advance?    MatchAnchors
-1   StateName   yes/no  yes/no      AnchorSetName/none
-2   ...
+        GoTo        Mark?   Advance?    MatchAnchors
+    1   StateName   yes/no  yes/no      AnchorSetName/none
+    2   ...
 
-    GoTo        Mark?   Advance?    MatchCoords
-1   StateName   yes/no  yes/no      CoordSetName/none
-2   ...
+        GoTo        Mark?   Advance?    MatchCoords
+    1   StateName   yes/no  yes/no      CoordSetName/none
+    2   ...
 
-Each type declares if the values are to be interpreted as control point
+Each action type declares if the values are to be read as control point
 indices, anchor indices, or pairs of coordinates, and each refers to a
 set of both marked and current glyph values that define the match point.
 These are defined last, and take a form respective to the action type:
 
-PointSetName
-    Marked PointIndex
-    Current PointIndex
+    PointSetName
+        Marked PointIndex
+        Current PointIndex
 
-AnchorSetName
-    Marked AnchorIndex
-    Current AnchorIndex
+    AnchorSetName
+        Marked AnchorIndex
+        Current AnchorIndex
 
-CoordSetName
-    Marked XCoord YCoord
-    Current XCoord YCoord
+    CoordSetName
+        Marked XCoord YCoord
+        Current XCoord YCoord
 
 For each type, the points the values resolve to within a given glyph
 space are used to align the current glyph to the marked one so that the
@@ -119,43 +128,48 @@ Right at the top of the file there are the usual glyph classes as found
 in other input files of AAT. These could, in fact, be reused verbatim
 from the subtables in the kerning file the anchors are to be used with.
 
-Below lies a header, AnchorList, separating the classes from the list of
-anchors. Now anchors are just pairs of coordinates grouped under the
+Below lies the `AnchorList` header, separating the classes from the list
+of anchors. Now anchors are just pairs of coordinates grouped under the
 names of the respective glyph classes. Referred class name goes up front
 on its own line, and the coordinates on the indented lines beneath:
 
-AnchorList
+    AnchorList
 
-ClassName
-    XCoord YCoord
-    XCoord YCoord
-    ...
+    ClassName
+        XCoord YCoord
+        XCoord YCoord
+        ...
 
-ClassName
-    XCoord YCoord
-    ...
+    ClassName
+        XCoord YCoord
+        ...
 
 That's all that goes into the anchor input file. Please see the
 accompanying example directory for some examples and more commentary.
 
 
-LIMITATIONS
+Limitations
+-----------
 
 For now, only the two, both state machine-based subtables for contextual
 kerning and attachment are available to use. Moreover, the relatively
-recent attachment positioning can be used within the 'kerx' table only.
+recent attachment positioning can be used within the `kerx` table only.
 
-The 'kerx' extended kerning table is not fully documented, so consider
+The `kerx` extended kerning table is not fully documented, so consider
 the code produced as being in part reverse-engineered with all the usual
-caveats. In case any issues should arise, an -l option to the compiler
-will produce the legacy 'kern' table that's still supported in CoreText
+caveats. In case any issues should arise, an `-l` option to the compiler
+will produce the legacy `kern` table that's still supported in CoreText
 on both OS X and iOS.
 
 Specifying kerning variations, part of the TrueType Variations
 technology found originally in AAT, is also currently not available.
 
 
-COPYRIGHT & LICENSE NOTICE
+Copyright & License notice
+--------------------------
 
 This work is copyrighted by Grzegorz Rolek, 2013, and is subject to the
 BSD 3-Clause License. Please see LICENSE for details.
+
+[1]: <http://developer.apple.com/fonts/>
+
