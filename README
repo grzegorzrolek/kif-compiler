@@ -2,42 +2,31 @@ Kerning Input File compiler for AAT
 ===================================
 
 This is a pretty rough compiler for the Kerning Input File, a text file
-to kern fonts in TrueType AAT. Its output is a hex code for the state
-machine-based kerning and anchor positioning tables that you fuse into a
-font with [OS X Font Tools][1].
+to kern fonts in TrueType AAT. It builds the state machine-based kerning
+and positioning data in form of the `kerx` and `ankr` tables found
+recently in AAT, and fuses that data into a font with OS X Font Tools.
 
 
-Requirements & Usage
---------------------
+Requirements
+------------
 
-You'll need a dump of your font's `post` table first. It will be used to
-lookup the glyph names, so the `post` table has to be in a format that
-actually has the names. Produce the dump with the Font Tools by running:
+You'll need a copy of the Font Tools available from the [Fonts section
+at Apple Developer][1] site. You'll be asked to sign into your Apple
+account before download, or to create one if you don't have one already.
 
-    ftxdumperfuser --table post --output post.xml font.ttf
 
-Having both the `post.xml` dump and your kerning file in place, run:
+Usage
+-----
 
-    ./kif.sh post.xml kerning.kif >kerx.xml
+Below you can find a description of the Kerning Input File. Having your
+kerning file ready, and the font file in place, run:
 
-That will make a `kerx.xml` file full of hex code for your kerning
-table, that can be now fused into the font, again with the Font Tools:
+    ./kif.sh kerning.kif font.ttf
 
-    ftxdumperfuser --table kerx --generic --datafile kerx.xml font.ttf
+In case you'd want to use anchor-based positioning, you'll need an extra
+file with your anchor data put through an `-a` option to the compiler:
 
-In case you'd want to use anchor-based attachment in your kerning file,
-you'll need an extra `ankr` font table with the anchor data. You can
-build it with a dedicated input file and an `-a` option to the compiler:
-
-    ./kif.sh -a post.xml anchors.kif >ankr.xml
-
-Then fuse it into the font in a way similar to the kerning table itself:
-
-    ftxdumperfuser --table ankr --generic --datafile ankr.xml font.ttf
-
-Hex code produced for both the kerning and anchor data files is nicely
-formatted and commented, what can be of much help in case something goes
-wrong in the process.
+    ./kif.sh -a anchors.kif kerning.kif font.ttf
 
 
 The KIF file format
@@ -146,6 +135,44 @@ on its own line, and the coordinates on the indented lines beneath:
 
 That's all that goes into the anchor input file. Please see the
 accompanying example directory for some examples and more commentary.
+
+
+Troubleshooting
+---------------
+
+Both your input files are translated into data files full of hex code
+for your `kerx` and `ankr` tables that are then fused into the font.
+These intermediate data files are nicely formatted and commented, what
+can be of much help in case something goes wrong in the process. To
+produce the files without actually fusing them in, use an `-n` option:
+
+    ./kif.sh -n -a anchors.kif kerning.kif font.ttf
+
+Data files named `kerx.xml` and `ankr.xml` are created next to your font
+file. You can look into them, or fuse into the font yourself with a
+variation on the following command:
+
+    ftxdumperfuser --generic --table kerx --datafile kerx.xml font.ttf
+
+Every time you run the compiler, the `post` table of your font is being
+dumped into a `post.xml` file for a quicker glyph name lookup. If you
+don't want it to happen repeatedly, you can either reuse the `post.xml`
+file that has been dumped already, or make one manually beforehand:
+
+    ftxdumperfuser --table post --output post.xml font.ttf
+
+In either case, point it to the compiler through a `-p` option:
+
+    ./kif.sh -p post.xml -a anchors.kif kerning.kif font.ttf
+
+Note that providing the `post` dump explicitly is sufficient to build
+the data files and the font itself may be skipped. This in case you
+either can't or don't want to use the Font Tools, or would rather like
+to run the compiler simply as an `file.kif` to `data.xml` translator:
+
+    ./kif.sh -n -p post.xml -a anchors.kif kerning.kif
+
+In such case, both data files will be created in the current directory.
 
 
 Limitations

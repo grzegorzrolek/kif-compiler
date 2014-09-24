@@ -5,10 +5,10 @@
 
 
 usage=$(cat <<EOF
-usage: $(basename $0) [-l] <post.xml> <kerning.kif>
-       $(basename $0) -a <post.xml> <anchors.kif>
+usage: $(basename $0) [-l] [-n] [-p post.xml] [-a anchors.kif] kerning.kif font.ttf
 EOF
 )
+
 
 # Prints a message to stderr and exits.
 err () {
@@ -17,7 +17,7 @@ err () {
 }
 
 # Parse and reset the arguments.
-args=$(getopt al $*)
+args=$(getopt np:a:l $*)
 test $? -ne 0 &&
 	echo >&2 "$usage" && exit 2
 set -- $args
@@ -26,17 +26,38 @@ tag='kerx'; v=2 # Table version, 'kerx' by default
 for i
 do
 	case "$i" in
-		-a) ankmode='yes'; shift;;
+		-n) dry='yes'; shift;;
+		-p) post=$2; shift 2;;
+		-a) ankfile=$2; shift 2;;
 		-l) tag='kern'; v=1; shift;;
 		--) shift; break;;
 	esac
 done
 
-# Make sure both file arguments are given.
-test $# != 2 &&
+# Make sure at least the kerning input file is given.
+test $# -lt 1 &&
 	echo >&2 "$usage" && exit 2
 
-post=$1 # Path to the 'post' table dump
+kif=$1 # the input file
+ttf=$2 # the font file, if any
+
+# Make sure either the 'post' table dump or the font file are given.
+test -z "$post" -a -z "$ttf" &&
+	echo >&2 "$usage" && exit 2
+
+# Prepare the paths for the kerx.xml and ankr.xml data files.
+kerx="$(dirname "$ttf")/$tag.xml"
+test $tag = 'kerx' -a "$ankfile" &&
+	ankr="$(dirname "$ttf")/ankr.xml"
+
+# Dump the 'post' table, if not given explicitly.
+if test -z "$post" -a "$ttf"
+then
+	post="$(dirname $ttf)/post.xml"
+	type ftxdumperfuser &>/dev/null ||
+		err "fatal: couldn't find the ftxdumperfuser"
+	ftxdumperfuser -t post -o $post $ttf
+fi
 
 # Find the line offset to the first glyph name record in the 'post' dump.
 postoff=$(grep -n '\.notdef' $post | cut -d : -f 1)
@@ -107,21 +128,21 @@ lucollapse () {
 
 eof="fatal: premature end of file"
 
-{
-
-l=0 # No. of line being parsed
-
-# Read the first line.
-read; let l++
-
-# Skip blank lines and line comments in front of the input file.
-until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-do read || break; let l++
-done
-
-# Parse the anchor extension file if given.
-if test $ankmode
+# Parse the anchor input file if given.
+if test $ankfile
 then
+
+	{
+
+	l=0 # No. of line being parsed
+
+	# Read the first line.
+	read; let l++
+
+	# Skip blank lines and line comments in front of the input file.
+	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+	do read || break; let l++
+	done
 
 	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 	printf "<genericSFNTTable tag=\"ankr\">\n"
@@ -308,8 +329,21 @@ then
 
 	printf "</genericSFNTTable>\n"
 
-	exit
+	} <$ankfile >$ankr
+
 fi
+
+{
+
+l=0 # No. of line being parsed
+
+# Read the first line.
+read; let l++
+
+# Skip blank lines and line comments in front of the input file.
+until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+do read || break; let l++
+done
 
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
@@ -324,7 +358,7 @@ let vlsize=2 # Value size
 off=0 # Current offset into the table
 
 # Scan the input file for a number of subtables.
-ntables=$(grep -c '^Type[ 	]' $2)
+ntables=$(grep -c '^Type[ 	]' $kif)
 
 # Print the table header before reading subtables.
 printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
@@ -861,6 +895,18 @@ done
 
 printf "\n</genericSFNTTable>\n"
 
-} <$2
+} <$kif >$kerx
+
+# Don't bother fusing if that's a dry run.
+test $dry && exit
+
+# Check if ftxdumperfuser is available.
+type ftxdumperfuser &>/dev/null ||
+	err "fatal: couldn't find the ftxdumperfuser"
+
+# Fuse the data files into the font.
+for data in $ankr $kerx
+do ftxdumperfuser -g -t $(basename -s .xml $data) -d $data $ttf
+done
 
 exit
