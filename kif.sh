@@ -80,6 +80,49 @@ indexof () {
 	index=-1
 }
 
+# Reads-in the classes into $clnames[$nclasses] and $luarr[$glstart..$glend].
+readcl () {
+	local term="$1" # termination line pattern
+	shift
+
+	clnames=($@) # Class names, with the ones provided
+	nclasses=$# # Number of classes
+	unset glstart glend # First/last glyph with a class assigned
+	luarr=() # Glyph-to-class index lookup array
+
+	# Read classes until a line with the termination pattern found.
+	until test -z "${REPLY##$term}"
+	do
+		line=(${REPLY%%[ 	]\/\/*})
+		if test $line != '+'
+		then
+			nclasses=${#clnames[@]}
+			clnames=(${clnames[@]} $line)
+		fi
+
+		for glyph in ${line[@]:1}
+		do
+			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
+			test $index ||
+				err "fatal: glyph not found: $glyph (line $l)"
+			let index-=$postoff
+			luarr[$index]=$nclasses
+			test $index -lt ${glstart=$index} && glstart=$index
+			test $index -gt ${glend=$index} && glend=$index
+		done
+
+		read || err "$eof"; let l++
+
+		# Skip blanks and comments inbetween.
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read || err "$eof"; let l++
+		done
+	done
+
+	# Update the number of classes.
+	let nclasses++
+}
+
 # Does the calculations for the bsearch header's $brange $bsel $bshift.
 bcalc () {
 	local usize=$1
@@ -158,45 +201,12 @@ then
 	let lusize=2 # Size of the anchor offset lookup entry
 	let mapsize=2*2+$lusize # Mapping size
 
-	unset glstart glend # First/last glyph with a class assigned
-	luarr=() # Glyph-to-class index lookup array
-	clnames=() # Class names
 	clrefs=() # Class names as referenced
 	anchors=() # Anchor coordinates
 	ankindices=() # Indices of anchors that start each new class
 
-	unset nclasses
-
 	# Read classes until the the anchor listing shows up.
-	until test -z "${REPLY##AnchorList*}"
-	do
-		line=(${REPLY%%[ 	]\/\/*})
-		if test $line != '+'
-		then
-			nclasses=${#clnames[@]}
-			clnames=(${clnames[@]} $line)
-		fi
-
-		for glyph in ${line[@]:1}
-		do
-			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
-			test $index ||
-				err "fatal: glyph not found: $glyph (line $l)"
-			let index-=$postoff
-			luarr[$index]=$nclasses
-			test $index -lt ${glstart=$index} && glstart=$index
-			test $index -gt ${glend=$index} && glend=$index
-		done
-
-		read || err "$eof"; let l++
-
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || err "$eof"; let l++
-		done
-	done
-
-	# Update the number of classes for later use.
-	let nclasses++
+	readcl 'AnchorList*'
 
 	# Read the first class reference.
 	read || err "$eof"; let l++
@@ -374,10 +384,6 @@ do
 	vertical='no'
 	crossstream='no'
 	unset tabfmt acttype # Subtable format and action type
-	luarr=() # Glyph-to-class index lookup array
-	clnames=(EOT OOB DEL EOL) # Class names
-	unset glstart # First glyph assigned to a class
-	unset glend # Last glyph assigned to a class
 	states=() # State records
 	stnames=() # State names
 	gotos=() # Next states
@@ -441,39 +447,8 @@ do
 		done
 	fi
 
-	unset nclasses
-
 	# Read classes until a state table header (indented line).
-	until test -z "${REPLY##[ 	]*}"
-	do
-		line=(${REPLY%%[ 	]\/\/*})
-		if test $line != '+'
-		then
-			nclasses=${#clnames[@]}
-			clnames=(${clnames[@]} $line)
-		fi
-
-		for glyph in ${line[@]:1}
-		do
-			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
-			test $index ||
-				err "fatal: glyph not found: $glyph (line $l)"
-			let index-=$postoff
-			luarr[$index]=$nclasses
-			test $index -lt ${glstart=$index} && glstart=$index
-			test $index -gt ${glend=$index} && glend=$index
-		done
-
-		read || err "$eof"; let l++
-
-		# Skip blanks and comments inbetween.
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || err "$eof"; let l++
-		done
-	done
-
-	# Update the number of classes for later use.
-	let nclasses++
+	readcl '[ 	]*' 'EOT' 'OOB' 'DEL' 'EOL'
 
 	# Check if the class list and state table header match.
 	line=(${REPLY%%[ 	]\/\/*})
