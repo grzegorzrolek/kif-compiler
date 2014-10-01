@@ -201,7 +201,6 @@ then
 	let lusize=2 # Size of the anchor offset lookup entry
 	let mapsize=2*2+$lusize # Mapping size
 
-	clrefs=() # Class names as referenced
 	anchors=() # Anchor coordinates
 	ankindices=() # Indices of anchors that start each new class
 
@@ -218,6 +217,8 @@ then
 	# Prevent the first reference from being accidentally indented.
 	test -z "${REPLY##[ 	]*}" &&
 		err "fatal: class reference expected (line $l)"
+
+	clrefs=() # Class names as referenced (vs. as defined)
 
 	# Read anchors until the end of file.
 	ankindex=0
@@ -257,16 +258,24 @@ then
 		done
 	done
 
-	# Remove unused classes from lookup array, if any.
+	# Resolve classes as defined into classes as referenced.
 	i=$glstart
 	while test $i -le $glend
 	do
 		clname=${clnames[${luarr[$i]}]}
 		indexof $clname ${clrefs[@]}
+
+		# Remove unused classes from lookup array, if any.
 		test $index -eq -1 &&
-			luarr[$i]=""
+			index=""
+
+		luarr[$i]=$index
 		let i++
 	done
+
+	# Use only the referenced class names from now on.
+	clnames=(${clrefs[@]})
+	unset clrefs
 
 	# Filter out segments from the lookup array.
 	lucollapse $glstart $glend
@@ -294,13 +303,12 @@ then
 
 	for i in ${!lusegs[@]}
 	do
-		s=(${lusegs[$i]}) # Segment of a class as defined
+		s=(${lusegs[$i]})
 
-		# Translate the class as defined to a class as referenced.
-		indexof ${clnames[${s[2]}]} ${clrefs[@]}
+		# Translate anchor indices to offsets.
+		let ankoffset=${ankindices[${s[2]}]}*4+${s[2]}*4
 
-		let ankoffset=${ankindices[$index]}*4+$index*4
-		names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clrefs[$index]}"
+		names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
 			$off ${s[0]} ${s[1]} $ankoffset "$names" && let off+=$mapsize
 	done
@@ -320,7 +328,7 @@ then
 		nextank=${ankindices[$(( i + 1 ))]=$nanchors}
 		let nclanchors=$nextank-$val/2 # No. of anchors in a class
 		printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-			$off $nclanchors ${clrefs[$i]} && let off+=4
+			$off $nclanchors ${clnames[$i]} && let off+=4
 
 		while test $(( val / 2 )) -lt $nextank
 		do
