@@ -168,6 +168,38 @@ lucollapse () {
 	done
 }
 
+# Prints the lookup array from $lusegs[$lusegcount] array and $mapsize.
+printlu () {
+	local arrname=$1 # values to use instead
+
+	# Use different values if provided, e.g., offsets instead of indices.
+	test $arrname &&
+		eval local arr=(\${$arrname[@]})
+
+	# Calculate the bsearch header from unit size and count.
+	bcalc $mapsize $lusegcount
+
+	printf "\n"
+	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
+		$off 2 "Lookup format" \
+		$(( off += 2 )) $mapsize "Unit size" \
+		$(( off += 2 )) $lusegcount "No. of units" \
+		$(( off += 2 )) $brange "Search range" \
+		$(( off += 2 )) $bsel "Entry selector" \
+		$(( off += 2 )) $bshift "Range shift" && let off+=2
+
+	for i in ${!lusegs[@]}
+	do
+		local s=(${lusegs[$i]})
+		local val=${arr[$i]-${s[2]}}
+		local names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
+		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
+			$off ${s[@]:0:2} $val "$names" && let off+=$mapsize
+	done
+	printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
+		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$mapsize
+}
+
 
 eof="fatal: premature end of file"
 
@@ -289,31 +321,17 @@ then
 		$off $luoff "Anchor lookup offset" \
 		$(( off += 4 )) $ankoff "Anchors offset" && let off+=4
 
-	# Calculate the bsearch header data.
-	bcalc $mapsize $lusegcount
-
-	printf "\n"
-	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
-		$off 2 "Lookup format" \
-		$(( off += 2 )) $mapsize "Unit size" \
-		$(( off += 2 )) $lusegcount "No. of units" \
-		$(( off += 2 )) $brange "Search range" \
-		$(( off += 2 )) $bsel "Entry selector" \
-		$(( off += 2 )) $bshift "Range shift" && let off+=2
-
+	# Translate anchor indices to offsets.
+	ankoffsets=()
 	for i in ${!lusegs[@]}
 	do
 		s=(${lusegs[$i]})
-
-		# Translate anchor indices to offsets.
 		let ankoffset=${ankindices[${s[2]}]}*4+${s[2]}*4
-
-		names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
-		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-			$off ${s[0]} ${s[1]} $ankoffset "$names" && let off+=$mapsize
+		ankoffsets[$i]=$ankoffset
 	done
-	printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$mapsize
+
+	# Print the lookup array, but with offsets instead of indices.
+	printlu 'ankoffsets'
 
 	# Pad the anchor lookups with zeros for word-alignment if necessary.
 	test $lupad -ne 0 &&
@@ -724,29 +742,10 @@ do
 		$(( off += 2*v )) $(( 4*v )) $etoff "Entry table offset" \
 		$(( off += 2*v )) $(( 4*v )) $vloff "Values offset" && let off+=2*$v
 
+	# Print either the modern or the legacy lookup array.
 	if test $tag = 'kerx'
 	then
-		# Calculate the bsearch header from unit size and count.
-		bcalc $mapsize $lusegcount
-
-		printf "\n"
-		printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
-			$off 2 "Lookup format" \
-			$(( off += 2 )) $mapsize "Unit size" \
-			$(( off += 2 )) $lusegcount "No. of units" \
-			$(( off += 2 )) $brange "Search range" \
-			$(( off += 2 )) $bsel "Entry selector" \
-			$(( off += 2 )) $bshift "Range shift" && let off+=2
-
-		for i in ${!lusegs[@]}
-		do
-			s=(${lusegs[i]})
-			names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
-			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-				$off ${lusegs[i]} "$names" && let off+=$mapsize
-		done
-		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-			$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$mapsize
+		printlu
 	else
 		printf "\n"
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
