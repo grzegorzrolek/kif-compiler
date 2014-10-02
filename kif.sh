@@ -385,8 +385,8 @@ printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
 let tabhead=4+2*2*$v # Subtable header size
-let cloff=5*2*$v # Class table offset (length of a state table header)
-let clsize=1*$v # Size of the mapping entry
+let luoff=5*2*$v # Lookup table offset (length of a state table header)
+let lusize=1*$v # Size of the lookup value
 let trsize=1*$v # Transition size
 let etsize=2+2*$v # Full entry size in the entry table
 let vlsize=2 # Value size
@@ -688,18 +688,18 @@ do
 		# Filter out glyph segments for the class lookups.
 		lucollapse $glstart $glend
 
-		let clhead=6*2 # Size of a binsearch lookup table header
-		let mapsize=2*2+$clsize # Mapping size
+		let luhead=6*2 # Size of a segmented lookup table header
+		let mapsize=2*2+$lusize # Mapping size
 		let nmappings=$lusegcount+1 # No. of mappings
 	else
-		let clhead=2*2 # Size of a trimmed array header
-		let mapsize=$clsize # Mapping size
+		let luhead=2*2 # Size of a trimmed lookup array header
+		let mapsize=$lusize # Mapping size
 		let nmappings=$glend-$glstart+1 # No. of mappings
 	fi
 
-	let cllen=$clhead+$nmappings*$mapsize # Class table length
-	let clpad=$cllen/$v%2*$v # Padding
-	let stoff=$cloff+$cllen+$clpad # State table offset
+	let lulen=$luhead+$nmappings*$mapsize # Class lookup table length
+	let lupad=$lulen/$v%2*$v # Padding
+	let stoff=$luoff+$lulen+$lupad # State table offset
 	let stlen=${#states[@]}*$nclasses*$trsize # State table length
 	let stpad=$stlen/$v%2*$v # Padding
 	let etoff=$stoff+$stlen+$stpad # Entry table offset
@@ -737,7 +737,7 @@ do
 	printf "\n"
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
 		$off $(( 4*v )) $nclasses "Class count" \
-		$(( off += 2*v )) $(( 4*v )) $cloff "Class lookup offset" \
+		$(( off += 2*v )) $(( 4*v )) $luoff "Class lookup offset" \
 		$(( off += 2*v )) $(( 4*v )) $stoff "State table offset" \
 		$(( off += 2*v )) $(( 4*v )) $etoff "Entry table offset" \
 		$(( off += 2*v )) $(( 4*v )) $vloff "Values offset" && let off+=2*$v
@@ -762,9 +762,9 @@ do
 	fi
 
 	# Pad the class lookups with zeros for word-alignment if necessary.
-	test $clpad -ne 0 &&
+	test $lupad -ne 0 &&
 		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
-			$off $(( clpad * 2 )) 0 && let off+=$clpad
+			$off $(( lupad * 2 )) 0 && let off+=$lupad
 
 	# Print at least stubs of class names along the transitions.
 	printf "\n\t                            <!-- "
