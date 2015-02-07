@@ -89,17 +89,17 @@ types of actions: `MatchPoints`, `MatchAnchors`, and `MatchCoords`:
     2   ...
 
 Each action type declares if the values are to be read as control point
-indices, anchor indices, or pairs of coordinates, and each refers to a
+numbers, anchor numbers, or pairs of coordinates, and each refers to a
 set of both marked and current glyph values that define the match point.
 These are defined last, and take a form respective to the action type:
 
     PointSetName
-        Marked PointIndex
-        Current PointIndex
+        Marked PointNumber
+        Current PointNumber
 
     AnchorSetName
-        Marked AnchorIndex
-        Current AnchorIndex
+        Marked AnchorNumber
+        Current AnchorNumber
 
     CoordSetName
         Marked XCoord YCoord

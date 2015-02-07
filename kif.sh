@@ -607,7 +607,13 @@ do
 				test ${#line[@]} -ne $(( nvlreq + 1 )) &&
 					err "fatal: wrong number of values (line $l)"
 
-				values=(${values[@]} ${line[@]:1})
+				value=${line[@]:1}
+
+				# Make the point and anchor indices zero-based.
+				test $acttype -eq 1 -o $acttype -eq 2 &&
+					let value--
+
+				values=(${values[@]} $value)
 
 				read || if test $field = 'Marked'
 					then err "$eof"
