@@ -494,11 +494,16 @@ do
 		line=(${REPLY%%[ 	]\/\/*})
 		stnames=(${stnames[@]} $line)
 
-		# Make the entry numbers zero-based.
 		state=()
 		for entry in ${line[@]:1}
 		do
+			# Fail on non-positive entry numbers.
+			test $entry -le 0 &&
+				err "fatal: non-positive entry number (line $l)"
+
+			# Make the numbers zero-based.
 			let entry--
+
 			state=(${state[@]} $entry)
 		done
 
@@ -609,9 +614,15 @@ do
 
 				value=${line[@]:1}
 
-				# Make the point and anchor indices zero-based.
-				test $acttype -eq 1 -o $acttype -eq 2 &&
+				if test $acttype -eq 1 -o $acttype -eq 2
+				then
+					# Fail on non-positive point/anchor index value.
+					test $value -le 0 &&
+						err "fatal: non-positive index value (line $l)"
+
+					# Make the indices zero-based.
 					let value--
+				fi
 
 				values=(${values[@]} $value)
 
