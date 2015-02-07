@@ -628,14 +628,14 @@ do
 
 				read || if test $field = 'Marked'
 					then err "$eof"
-					else break; let l++
-					fi
+					else break
+					fi; let l++
 
 				until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 				do read || if test $field = 'Marked'
 					then err "$eof"
-					else break 2; let l++
-					fi
+					else break 2
+					fi; let l++
 				done
 			done
 
