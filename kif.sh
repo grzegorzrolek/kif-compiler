@@ -294,6 +294,13 @@ then
 	i=$glstart
 	while test $i -le $glend
 	do
+		# Skip null values or they'll default to zero.
+		if test -z "${luarr[$i]}"
+		then
+			let i++
+			continue
+		fi
+
 		clname=${clnames[${luarr[$i]}]}
 		indexof $clname ${clrefs[@]}
 
