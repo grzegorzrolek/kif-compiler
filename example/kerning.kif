@@ -1,49 +1,70 @@
 // Example of a Kerning Input File as read by the compiler
 // Copyright 2013 Grzegorz Rolek
 //
-// This sample file deals with an elision of L'Amore or similar phrase,
-// where an apostrophe, normally kerned into 'L', is followed by an 'A',
-// in which case it needs to be moved away so as not to touch the L's
-// arm, and then the apostrophe itself balanced between the two letters.
+// This file deals with the issue of kerning the elision in L'Amore or
+// similar, where the apostrophe, being kerned into L as usual, makes
+// the A that follows clash with the L's arm. In such case, the A needs
+// to be moved away and the apostrophe in-between itself balanced.
+//
+// There's also an example of an anchor-based attachment subtable that
+// does simple mark-to-base and mark-to-mark positioning. Coordinates of
+// the anchors indicated are defined in a separate 'anchors.kif' file.
 
-// Kerning Input File format has never been publicly released by Apple,
-// so this file approximates the syntax based on the Morph Input File.
-// Subtable header is modified to meet the kerning table specification:
 
-Type Contextual // the only type supported for now
-Orientation H // (H)orizontal or (V)ertical
-Cross-stream no // optional; defaults to 'no'
-
-// Class listing and the state table follow the MIF syntax literally:
+Type Contextual
+Orientation H
 
 L       L
 Aps     apostrophe
-A       A Aacute Agrave
+As      A Aacute Agrave
 
-            EOT OOB DEL EOL L   Aps A
+            EOT OOB DEL EOL L   Aps As
 StartText   1   1   1   1   2   1   1
 StartLine   1   1   1   1   2   1   1
-L           1   1   2   1   2   3   1
+HasL        1   1   2   1   2   3   1
 Elision     1   1   4   1   1   1   5
-
-// Entry table swaps the mark flag for a push flag, which pushes current
-// glyph onto the kern stack, and indicates kern values to apply:
 
     GoTo            Push?   Advance?    KernValues
 1   StartText       no      yes         none
-2   L               no      yes         none
-3   Elision         yes     yes         LElision
+2   HasL            no      yes         none
+3   Elision         yes     yes         KernApsIntoL
 4   Elision         no      yes         none
-5   StartText       yes     yes         LtoAElision
+5   StartText       yes     yes         MakeItAllBalance
 
-// Each list of values is applied to the kern stack by popping glyphs
-// from the stack one by one until the last value is consumed (multiple
-// values applied to one particular glyph on a stack are additive):
+KernApsIntoL
+    -60 // kerns the apostrophe as usual
 
-LElision
-    -60 // kerns the foremost glyph from the current stack
+MakeItAllBalance
+    40 20 // moves away the A and the apostrophe inbetween
 
-LtoAElision
-    40 20 // first the most, then the second most recent glyph
 
-// More subtables are defined in sequence, the way it's done with a MIF.
+Type Attachment
+Orientation H
+
+Vwl     a e i o u
+Mrk     acutecmb gravecmb
+
+            EOT OOB DEL EOL Vwl Mrk
+StartText   1   1   1   1   2   1
+StartLine   1   1   1   1   2   1
+HasBase     1   1   3   1   2   4
+BaseShift   1   1   1   1   1   5
+Stacking    1   1   6   1   2   7
+
+    GoTo            Mark?   Advance?    MatchAnchors
+1   StartText       no      yes         none
+2   HasBase         yes     yes         none
+3   HasBase         no      yes         none
+4   BaseShift       no      no          MarkOverVowel
+5   Stacking        yes     yes         none
+6   Stacking        no      yes         none
+7   BaseShift       no      no          MarkToMark
+
+MarkOverVowel
+    Marked 1 // base vowel's first defined, top anchor
+    Current 1 // mark's default combining anchor
+
+MarkToMark
+    Marked 2 // mark's anchor for a mark-to-mark positioning
+    Current 1 // current mark's default anchor
+

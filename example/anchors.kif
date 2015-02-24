@@ -3,33 +3,20 @@
 //
 // This is a simple and pretty straightforward file that reuses the
 // common conventions found in other input file formats of AAT.
+//
+// In this simplified example all the vowels share the same anchor
+// coordinates, but in practice these would of course be customized.
 
-// Glyph classes are defined exactly as one would expect. These could
-// actually be copy-pasted from the anchor-based attachment subtables in
-// your main kerning file:
 
 Vowels  a e i o u
-Above   acutecmb gravecmb
-Below   cedillacmb
-Ogonek  ogonekcmb
-
-// Right beneath the AnchorList separator is the list of anchors. These
-// are just pairs of coordinates that are grouped under the names of the
-// glyph classes for which particular anchors are being defined:
+Marks   acutecmb gravecmb
 
 AnchorList
 
 Vowels
-    200 600 // x and y coordinates for combining marks above
-    200 0 // x and y for combining marks below
-    400 0 // the ogonek
+    200 600 // x and y coordinates of a base, top anchor
 
-Above
-    -200 600
-
-Below
-    -200 0
-
-Ogonek
-    0 0
+Marks
+    -200 600 // the default combining anchor
+    -200 800 // base anchor in mark-to-mark positioning
 
