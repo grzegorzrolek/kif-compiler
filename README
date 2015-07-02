@@ -37,9 +37,10 @@ your workflow in any way, please see _Troubleshooting_ below.
 The KIF file format
 -------------------
 
-Kerning Input File hasn't apparently been published by Apple, although
-it had once a mention in the manual for OS X Font Tools. Here what
-follows is a pretty straightforward approximation of the format based on
+Kerning Input File, although it once [had a mention within the Font Tool
+Suite][2], it appears its format [hasn't been documented by Apple][3],
+and that there are no examples of its syntax left in the wild. What
+follows is thus a straightforward approximation of the format based on
 the Morph Input File, a related format still in use. If you've ever
 worked with MIF, the following will look familiar; if not, please see
 the relevant chapter in the OS X Font Tools documentation first.
@@ -204,4 +205,6 @@ This work is copyrighted by Grzegorz Rolek, 2013, and is subject to the
 BSD 3-Clause License. Please see LICENSE for details.
 
 [1]: <http://developer.apple.com/fonts/>
+[2]: <http://osdir.com/ml/coretext-dev/2010-03/msg00002.html>
+[3]: <http://freetengwar.sourceforge.net/adding_graphite_and_aat.html#kerning_input_file>
 
