@@ -23,10 +23,15 @@ kerning file ready, and the font file in place, run:
 
     ./kif.sh kerning.kif font.ttf
 
-In case you'd want to use anchor-based positioning, you'll need an extra
-file with your anchor data put through an `-a` option to the compiler:
+If your input file involves any anchor-based positioning, you'll need an
+extra file with your anchor data passed through an `-a` option to the
+compiler:
 
     ./kif.sh -a anchors.kif kerning.kif font.ttf
+
+Note: Helper files named `post.xml`, `kerx.xml`, and `ankr.xml` for
+anchors will be created next to your font file. If these conflict with
+your workflow in any way, please see _Troubleshooting_ below.
 
 
 The KIF file format
