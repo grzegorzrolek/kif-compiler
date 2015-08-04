@@ -10,10 +10,23 @@ EOF
 )
 
 
-# Prints a message to stderr and exits.
+# err message: print message to stderr and exit
 err () {
 	echo >&2 $0: $1
 	exit ${2-1}
+}
+
+# indexof token list: find $index of token within list
+indexof () {
+	local token=$1
+	shift
+	index=0
+	for item
+	do
+		test $token = $item && return
+		let index++
+	done
+	index=-1
 }
 
 # Parse and reset the arguments.
@@ -66,19 +79,6 @@ test $postoff ||
 
 # Parse the 'post' table dump for an array of glyphs names.
 glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
-
-# Fills $index with index of a token within the list following the token.
-indexof () {
-	local token=$1
-	shift
-	index=0
-	for item
-	do
-		test $token = $item && return
-		let index++
-	done
-	index=-1
-}
 
 # Reads-in the classes into $clnames[$nclasses] and $luarr[$glstart..$glend].
 readcl () {
