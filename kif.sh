@@ -10,6 +10,8 @@ EOF
 )
 
 
+eof="fatal: premature end of file"
+
 # err message: print message to stderr and exit
 err () {
 	echo >&2 $0: $1
@@ -29,13 +31,14 @@ indexof () {
 	index=-1
 }
 
+tag='kerx'; v=2 # Table version, 'kerx' by default
+
 # Parse and reset the arguments.
 args=$(getopt np:a:l $*)
 test $? -ne 0 &&
 	echo >&2 "$usage" && exit 2
 set -- $args
 
-tag='kerx'; v=2 # Table version, 'kerx' by default
 for i
 do
 	case "$i" in
@@ -47,12 +50,12 @@ do
 	esac
 done
 
-# Make sure at least the kerning input file is given.
-test $# -lt 1 &&
-	echo >&2 "$usage" && exit 2
-
 kif=$1 # the input file
 ttf=$2 # the font file, if any
+
+# Make sure at least the kerning input file is given.
+test -z "$kif" &&
+	echo >&2 "$usage" && exit 2
 
 # Make sure either the 'post' table dump or the font file are given.
 test -z "$post" -a -z "$ttf" &&
@@ -201,15 +204,19 @@ printlu () {
 }
 
 
-eof="fatal: premature end of file"
-
 # Parse the anchor input file if given.
 if test $ankfile
 then
 
 	{
 
-	l=0 # No. of line being parsed
+	l=0 # number of line being parsed
+	off=0 # current offset
+
+	clrefs=() # Class names as referenced (vs. as defined)
+	anchors=() # Anchor coordinates
+	ankindices=() # Indices of anchors that start each new class
+	ankoffsets=() # Calculated anchor offsets
 
 	# Read the first line.
 	read; let l++
@@ -222,19 +229,9 @@ then
 	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 	printf "<genericSFNTTable tag=\"ankr\">\n"
 
-	off=0 # Current offset into the table
-
 	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
 		$off 0 "Table version" \
 		$(( off += 2 )) 0 "Flags" && let off+=2
-
-	let luoff=12 # Lookup table offset, constant
-	let luhead=6*2 # Size of a bsearch lookup table header
-	let lusize=2 # Size of the anchor offset lookup entry
-	let mapsize=2*2+$lusize # Mapping size
-
-	anchors=() # Anchor coordinates
-	ankindices=() # Indices of anchors that start each new class
 
 	# Read classes until the the anchor listing shows up.
 	readcl 'AnchorList*'
@@ -249,8 +246,6 @@ then
 	# Prevent the first reference from being accidentally indented.
 	test -z "${REPLY##[ 	]*}" &&
 		err "fatal: class reference expected (line $l)"
-
-	clrefs=() # Class names as referenced (vs. as defined)
 
 	# Read anchors until the end of file.
 	ankindex=0
@@ -319,6 +314,10 @@ then
 	# Filter out segments from the lookup array.
 	lucollapse $glstart $glend
 
+	let luoff=12 # Lookup table offset, constant
+	let luhead=6*2 # Size of a bsearch lookup table header
+	let lusize=2 # Size of the anchor offset lookup entry
+	let mapsize=2*2+$lusize # Mapping size
 	let nmappings=$lusegcount+1 # No. of mappings
 	let lulen=$luhead+$nmappings*$mapsize # Lookup table length
 	let lupad=$lulen/2%2*2 # Padding
@@ -329,7 +328,6 @@ then
 		$(( off += 4 )) $ankoff "Anchors offset" && let off+=4
 
 	# Translate anchor indices to offsets.
-	ankoffsets=()
 	for i in ${!lusegs[@]}
 	do
 		s=(${lusegs[$i]})
@@ -378,7 +376,8 @@ fi
 
 {
 
-l=0 # No. of line being parsed
+l=0 # number of line being parsed
+off=0 # current offset
 
 # Read the first line.
 read; let l++
@@ -397,8 +396,6 @@ let lusize=1*$v # Size of the lookup value
 let trsize=1*$v # Transition size
 let etsize=2+2*$v # Full entry size in the entry table
 let vlsize=2 # Value size
-
-off=0 # Current offset into the table
 
 # Scan the input file for a number of subtables.
 ntables=$(grep -c '^Type[ 	]' $kif)
@@ -425,10 +422,13 @@ do
 	fladvance=() # Flags for the advance action
 	actions=() # Kern value lists to apply
 	actnames=() # Names of kern value lists to apply
+	lact=() # Line numbers of actions for reporting undefined values
 	values=() # Kerning values
 	vlnames=() # Names of the kern value lists
 	vlindices=() # Indexes of values beginning the lists
-	vlpack=1 # No. of values per record; depends on table format
+	eolmarks=() # Number of end-of-list markers prior to each list
+	eolmarkcount=0 # End-of-list marker count in total
+	vlpack=1 # Number of values per record; depends on table format
 
 	# Parse the input line, comments excluded.
 	line=(${REPLY%%[ 	]\/\/*})
@@ -552,8 +552,6 @@ do
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read || err "$eof"; let l++
 	done
-
-	lact=() # Line numbers of actions for later reporting
 
 	# Read entries until a blank line, or an indent (the Font Tools way).
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
@@ -691,7 +689,6 @@ do
 	# Pre-compute the end-of-list marker count prior to each action.
 	if test $tag = 'kerx' -a $tabfmt -eq 1
 	then
-		eolmarks=() # Marker count, action-indexed
 		previndex=0
 		nmarks=0
 		for i in ${!vlindices[@]}
@@ -705,6 +702,8 @@ do
 			eolmarks[$i]=$nmarks
 			previndex=$currindex
 		done
+
+		let eolmarkcount=$nmarks+1
 	fi
 
 	if test $tag = 'kerx'
@@ -731,8 +730,7 @@ do
 	let etpad=$etlen/$v%2*$v # Padding
 	let vloff=$etoff+$etlen+$etpad # Kern values offset
 	let vllen=${#values[@]}*$vlsize # Values length
-	test $tag = 'kerx' -a $tabfmt -eq 1 &&
-		let vllen+=\($nmarks+1\)*$vlsize # the end-of-list markers
+	let vllen+=$eolmarkcount*$vlsize # the end-of-list markers, if any
 	let vlpad=$vllen/$v%2*$v # Padding
 	let tablen=$tabhead+$vloff+$vllen+$vlpad # Subtable length
 
