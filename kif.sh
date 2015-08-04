@@ -20,8 +20,7 @@ err () {
 
 # indexof token list: find $index of token within list
 indexof () {
-	local token=$1
-	shift
+	local token=$1; shift
 	index=0
 	for item
 	do
@@ -50,15 +49,10 @@ do
 	esac
 done
 
-kif=$1 # the input file
-ttf=$2 # the font file, if any
+kif=$1; ttf=$2
 
-# Make sure at least the kerning input file is given.
-test -z "$kif" &&
-	echo >&2 "$usage" && exit 2
-
-# Make sure either the 'post' table dump or the font file are given.
-test -z "$post" -a -z "$ttf" &&
+# Make sure we have the right set of arguments
+test -z "$kif" -o -z "$post" -a -z "$ttf" &&
 	echo >&2 "$usage" && exit 2
 
 # Prepare the paths for the kerx.xml and ankr.xml data files.
@@ -85,8 +79,7 @@ glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post)
 
 # Reads-in the classes into $clnames[$nclasses] and $luarr[$glstart..$glend].
 readcl () {
-	local term="$1" # termination line pattern
-	shift
+	local term="$1"; shift # termination line pattern
 
 	clnames=($@) # Class names, with the ones provided
 	nclasses=$# # Number of classes
@@ -128,8 +121,7 @@ readcl () {
 
 # Does the calculations for the bsearch header's $brange $bsel $bshift.
 bcalc () {
-	local usize=$1
-	local nunits=$2
+	local usize=$1 nunits=$2
 	bsel=0 # i.e., an exponent
 	while test $(( nunits >> bsel )) -gt 1
 	do let bsel++
@@ -140,21 +132,16 @@ bcalc () {
 
 # Finds segments within $luarr array and puts them in $lusegs[$lusegcount].
 lucollapse () {
-	local start=$1
-	local end=$2
-	local i=$start
+	local start=$1 end=$2
 	lusegs=() # lookup segments
 	lusegcount=0
-	while test $i -le $end
+	local i=$start; while test $i -le $end
 	do
-		unset value
-		local value=${luarr[$i]}
+		unset value; local value=${luarr[$i]}
 
 		# Skip holes in the array.
 		if test -z "$value"
-		then
-			let i++
-			continue
+		then let i++; continue
 		fi
 
 		local first=$i
@@ -173,11 +160,8 @@ lucollapse () {
 
 # Prints the lookup array from $lusegs[$lusegcount] array and $mapsize.
 printlu () {
-	local arrname=$1 # values to use instead
-
-	# Use different values if provided, e.g., offsets instead of indices.
-	test $arrname &&
-		eval local arr=(\${$arrname[@]})
+	local arrname=$1; test $arrname &&
+		eval local arr=(\${$arrname[@]}) # values to use instead
 
 	# Calculate the bsearch header from unit size and count.
 	bcalc $mapsize $lusegcount
@@ -194,10 +178,9 @@ printlu () {
 	for i in ${!lusegs[@]}
 	do
 		local s=(${lusegs[$i]})
-		local val=${arr[$i]-${s[2]}}
 		local names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-			$off ${s[@]:0:2} $val "$names" && let off+=$mapsize
+			$off ${s[@]:0:2} ${arr[$i]-${s[2]}} "$names" && let off+=$mapsize
 	done
 	printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
 		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$mapsize
@@ -248,8 +231,7 @@ then
 		err "fatal: class reference expected (line $l)"
 
 	# Read anchors until the end of file.
-	ankindex=0
-	until test -z "$REPLY"
+	let loc=0; until test -z "$REPLY"
 	do
 		line=(${REPLY%%[ 	]\/\/*})
 		indexof $line ${clnames[@]}
@@ -259,7 +241,7 @@ then
 		test $index -ne -1 &&
 			err "fatal: class referenced twice: $line (line $l)"
 		clrefs[${#clrefs[@]}]=$line
-		ankindices=(${ankindices[@]} $ankindex)
+		ankindices=(${ankindices[@]} $loc)
 
 		read || break; let l++
 
@@ -275,7 +257,7 @@ then
 				err "fatal: wrong number of coordinates (line $l)"
 			anchors=(${anchors[@]} ${line[@]})
 
-			let ankindex++
+			let loc++
 
 			read || break 2; let l++
 
@@ -286,14 +268,11 @@ then
 	done
 
 	# Resolve classes as defined into classes as referenced.
-	i=$glstart
-	while test $i -le $glend
+	let i=$glstart; while test $i -le $glend
 	do
 		# Skip null values or they'll default to zero.
 		if test -z "${luarr[$i]}"
-		then
-			let i++
-			continue
+		then let i++; continue
 		fi
 
 		clname=${clnames[${luarr[$i]}]}
@@ -308,8 +287,7 @@ then
 	done
 
 	# Use only the referenced class names from now on.
-	clnames=(${clrefs[@]})
-	unset clrefs
+	clnames=(${clrefs[@]}); unset clrefs
 
 	# Filter out segments from the lookup array.
 	lucollapse $glstart $glend
@@ -343,15 +321,13 @@ then
 		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
 			$off $(( lupad * 2 )) 0 && let off+=$lupad
 
-	val=0 # Current value's index
 	let nanchors=${#anchors[@]}/2 # No. of all the anchors
 	printf "\n"
-	for i in ${!ankindices[@]}
+	let val=0; for i in ${!ankindices[@]}
 	do
 		nextank=${ankindices[$(( i + 1 ))]=$nanchors}
-		let nclanchors=$nextank-$val/2 # No. of anchors in a class
 		printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-			$off $nclanchors ${clnames[$i]} && let off+=4
+			$off $(( nextank - val/2 )) ${clnames[$i]} && let off+=4
 
 		while test $(( val / 2 )) -lt $nextank
 		do
@@ -397,15 +373,12 @@ let trsize=1*$v # Transition size
 let etsize=2+2*$v # Full entry size in the entry table
 let vlsize=2 # Value size
 
-# Scan the input file for a number of subtables.
-ntables=$(grep -c '^Type[ 	]' $kif)
-
 # Print the table header before reading subtables.
 printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
 	$off $v 0 "Table version" && let off+=4
 
 printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-	$off $ntables "No. of subtables" && let off+=4
+	$off $(grep -c '^Type[ 	]' $kif) "No. of subtables" && let off+=4
 
 # Read the file subtable by subtable to the end of file.
 while test "$REPLY" -a -z "${REPLY##Type[ 	]*}"
@@ -654,8 +627,7 @@ do
 			line=(${REPLY%%[ 	]\/\/*})
 
 			# Fail on a reset value in a non-cross-stream table.
-			! test $crossstream = 'yes' &&
-				test -z "${REPLY##*Reset*}" &&
+			test $crossstream != 'yes' -a -z "${REPLY##*Reset*}" &&
 				err "fatal: kern reset in a non-cross-stream table (line $l)"
 
 			values=(${values[@]} ${line[@]})
@@ -689,18 +661,16 @@ do
 	# Pre-compute the end-of-list marker count prior to each action.
 	if test $tag = 'kerx' -a $tabfmt -eq 1
 	then
-		previndex=0
-		nmarks=0
-		for i in ${!vlindices[@]}
+		let prev=0 nmarks=0; for i in ${!vlindices[@]}
 		do
-			currindex=${vlindices[$i]}
+			curr=${vlindices[$i]}
 
 			# Increase the count for non-empty actions only.
-			test $currindex -gt $previndex &&
+			test $curr -gt $prev &&
 				let nmarks++
 
 			eolmarks[$i]=$nmarks
-			previndex=$currindex
+			prev=$curr
 		done
 
 		let eolmarkcount=$nmarks+1
@@ -744,8 +714,8 @@ do
 	test $vertical = 'yes' && let flcover+=16#80
 	test $crossstream = 'yes' && let flcover+=16#40
 
-	# Make the coverage field 2 bytes longer for the extended table.
-	test $tag = 'kerx' && (( flcover <<= 16 ))
+	test $tag = 'kerx' &&
+		(( flcover <<= 16 )) # extended coverage field
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
 		$off $(( 4*v - 2 )) $flcover "Coverage" \
@@ -754,7 +724,8 @@ do
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
 		$off $(( 4*v )) 0 "Variation tuple index" && let off+=2*$v
 
-	test $acttype && vloff=$(( vloff + (acttype << 29) ))
+	test $acttype &&
+		vloff=$(( vloff + (acttype << 29) )) # first two bits
 
 	printf "\n"
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
@@ -777,9 +748,8 @@ do
 		for i in $(seq $glstart $glend)
 		do
 			class=${luarr[$i]-1}
-			names="${glnames[$i]}: ${clnames[$class]}"
 			printf "\t<dataline offset=\"%08X\" hex=\"%02X\"/> <!-- %s -->\n" \
-				$off $class "$names" && let off+=$mapsize
+				$off $class "${glnames[$i]}: ${clnames[$class]}" && let off+=$mapsize
 		done
 	fi
 
@@ -852,9 +822,8 @@ do
 		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
 			$off $(( etpad * 2 )) 0 && let off+=$etpad
 
-	val=0
 	printf "\n"
-	for i in ${!vlindices[@]}
+	let val=0; for i in ${!vlindices[@]}
 	do
 		printf "\t<dataline offset=\"%08X\" hex=\"" $off
 
@@ -863,27 +832,25 @@ do
 		do
 			value=${values[$val]}
 
-			# Make the special reset value into a proper flag.
-			test $value = 'Reset' && let value=16#8000
+			test $value = 'Reset' &&
+				let value=16#8000 # cross-stream reset flag
 
-			# Make a 2's complement for a negative value.
-			test $value -lt 0 && let value=16#10000+$value
+			test $value -lt 0 &&
+				let value=16#10000+$value # 2's complement
 
 			if test $tag != 'kerx'
 			then
 				# Unset the least significant bit of each value.
 				let value-=$value%2
 
-				# Set the list-end flag for the last value in a list.
-				test $(( val + 1 )) -eq $nextval && let value+=1
+				test $(( val + 1 )) -eq $nextval &&
+					let value+=1 # list-ending flag
 			fi
 
 			printf "%04X " $value && let off+=$vlsize
 
-			# Place an end-of-list marker for the extended table.
-			test $tag = 'kerx' -a $tabfmt -eq 1 &&
-				test $(( val + 1 )) -eq $nextval &&
-				printf "%04X" $(( 16#FFFF )) && let off+=$vlsize
+			test $tag = 'kerx' -a $tabfmt -eq 1 -a $(( val + 1 )) -eq $nextval &&
+				printf "%04X" $(( 16#FFFF )) && let off+=$vlsize # end-of-list marker
 
 			let val++
 		done
@@ -913,4 +880,3 @@ for data in $ankr $kerx
 do ftxdumperfuser -g -t $(basename -s .xml $data) -d $data $ttf
 done
 
-exit
