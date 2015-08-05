@@ -77,12 +77,12 @@ test $postoff ||
 # Parse the 'post' table dump for an array of glyphs names.
 glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
 
-# Reads-in the classes into $clnames[$nclasses] and $luarr[$glstart..$glend].
-readcl () {
+# clread term: read classes into $clnames and $luarr until term pattern
+clread () {
 	local term="$1"; shift # termination line pattern
 
 	clnames=($@) # Class names, with the ones provided
-	nclasses=$# # Number of classes
+	clcount=$# # Number of classes
 	unset glstart glend # First/last glyph with a class assigned
 	luarr=() # Glyph-to-class index lookup array
 
@@ -92,7 +92,7 @@ readcl () {
 		line=(${REPLY%%[ 	]\/\/*})
 		if test $line != '+'
 		then
-			nclasses=${#clnames[@]}
+			clcount=${#clnames[@]}
 			clnames=(${clnames[@]} $line)
 		fi
 
@@ -102,7 +102,7 @@ readcl () {
 			test $index ||
 				err "fatal: glyph not found: $glyph (line $lineno)"
 			let index-=$postoff
-			luarr[$index]=$nclasses
+			luarr[$index]=$clcount
 			test $index -lt ${glstart=$index} && glstart=$index
 			test $index -gt ${glend=$index} && glend=$index
 		done
@@ -116,21 +116,21 @@ readcl () {
 	done
 
 	# Update the number of classes.
-	let nclasses++
+	let clcount++
 }
 
-# Does the calculations for the bsearch header's $brange $bsel $bshift.
-bcalc () {
+# bscalc: calculate bsearch header's $bsrange $bssel $bsshift
+bscalc () {
 	local usize=$1 nunits=$2
-	bsel=0 # i.e., an exponent
-	while test $(( nunits >> bsel )) -gt 1
-	do let bsel++
+	bssel=0 # i.e., an exponent
+	while test $(( nunits >> bssel )) -gt 1
+	do let bssel++
 	done
-	brange=$(( usize * 2**bsel ))
-	bshift=$(( usize * (nunits - 2**bsel) ))
+	bsrange=$(( usize * 2**bssel ))
+	bsshift=$(( usize * (nunits - 2**bssel) ))
 }
 
-# Finds segments within $luarr array and puts them in $lusegs[$lusegcount].
+# lucollapse: filter out segments from $luarr into $lusegs
 lucollapse () {
 	local start=$1 end=$2
 	lusegs=() # lookup segments
@@ -158,32 +158,32 @@ lucollapse () {
 	done
 }
 
-# Prints the lookup array from $lusegs[$lusegcount] array and $mapsize.
-printlu () {
+# luprint array: print lookups from either $lusegs or array
+luprint () {
 	local arrname=$1; test $arrname &&
 		eval local arr=(\${$arrname[@]}) # values to use instead
 
 	# Calculate the bsearch header from unit size and count.
-	bcalc $mapsize $lusegcount
+	bscalc $lumapsize $lusegcount
 
 	printf "\n"
 	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
 		$off 2 "Lookup format" \
-		$(( off += 2 )) $mapsize "Unit size" \
+		$(( off += 2 )) $lumapsize "Unit size" \
 		$(( off += 2 )) $lusegcount "No. of units" \
-		$(( off += 2 )) $brange "Search range" \
-		$(( off += 2 )) $bsel "Entry selector" \
-		$(( off += 2 )) $bshift "Range shift" && let off+=2
+		$(( off += 2 )) $bsrange "Search range" \
+		$(( off += 2 )) $bssel "Entry selector" \
+		$(( off += 2 )) $bsshift "Range shift" && let off+=2
 
 	for i in ${!lusegs[@]}
 	do
 		local s=(${lusegs[$i]})
 		local names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-			$off ${s[@]:0:2} ${arr[$i]-${s[2]}} "$names" && let off+=$mapsize
+			$off ${s[@]:0:2} ${arr[$i]-${s[2]}} "$names" && let off+=$lumapsize
 	done
 	printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$mapsize
+		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$lumapsize
 }
 
 
@@ -217,7 +217,7 @@ then
 		$(( off += 2 )) 0 "Flags" && let off+=2
 
 	# Read classes until the the anchor listing shows up.
-	readcl 'AnchorList*'
+	clread 'AnchorList*'
 
 	# Read the first class reference.
 	read || err "$eof"; let lineno++
@@ -275,8 +275,8 @@ then
 		then let i++; continue
 		fi
 
-		clname=${clnames[${luarr[$i]}]}
-		indexof $clname ${clrefs[@]}
+		name=${clnames[${luarr[$i]}]}
+		indexof $name ${clrefs[@]}
 
 		# Remove unused classes from lookup array, if any.
 		test $index -eq -1 &&
@@ -295,9 +295,9 @@ then
 	let luoff=12 # Lookup table offset, constant
 	let luhead=6*2 # Size of a bsearch lookup table header
 	let lusize=2 # Size of the anchor offset lookup entry
-	let mapsize=2*2+$lusize # Mapping size
-	let nmappings=$lusegcount+1 # No. of mappings
-	let lulen=$luhead+$nmappings*$mapsize # Lookup table length
+	let lumapsize=2*2+$lusize # Mapping size
+	let lumapcount=$lusegcount+1 # Number of mappings
+	let lulen=$luhead+$lumapcount*$lumapsize # Lookup table length
 	let lupad=$lulen/2%2*2 # Padding
 	let ankoff=$luoff+$lulen+$lupad # Anchor table offset
 
@@ -314,7 +314,7 @@ then
 	done
 
 	# Print the lookup array, but with offsets instead of indices.
-	printlu 'ankoffsets'
+	luprint 'ankoffsets'
 
 	# Pad the anchor lookups with zeros for word-alignment if necessary.
 	test $lupad -ne 0 &&
@@ -366,7 +366,7 @@ done
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
-let tabhead=4+2*2*$ver # Subtable header size
+let tbhead=4+2*2*$ver # Subtable header size
 let luoff=5*2*$ver # Lookup table offset (length of a state table header)
 let lusize=1*$ver # Size of the lookup value
 let trsize=1*$ver # Transition size
@@ -384,9 +384,9 @@ printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 while test "$REPLY" -a -z "${REPLY##Type[ 	]*}"
 do
 
-	vertical='no'
-	crossstream='no'
-	unset tabfmt acttype # Subtable format and action type
+	flvert='no'
+	flcross='no'
+	unset tbfmt acttype # Subtable format and action type
 	states=() # State records
 	stnames=() # State names
 	gotos=() # Next states
@@ -395,7 +395,7 @@ do
 	fladvance=() # Flags for the advance action
 	actions=() # Kern value lists to apply
 	actnames=() # Names of kern value lists to apply
-	lact=() # Line numbers of actions for reporting undefined values
+	actlines=() # Line numbers of actions for reporting undefined values
 	values=() # Kerning values
 	vlnames=() # Names of the kern value lists
 	vlindices=() # Indexes of values beginning the lists
@@ -408,12 +408,12 @@ do
 	test $line != "Type" &&
 		err "fatal: kerning type expected (line $lineno)"
 	case ${line[@]:1} in
-		Contextual) tabfmt=1;;
-		Attachment) tabfmt=4;;
+		Contextual) tbfmt=1;;
+		Attachment) tbfmt=4;;
 		*) err "fatal: unknown kerning type: ${line[@]:1} (line $lineno)";;
 	esac
 
-	test $tabfmt -eq 4 -a $tag != 'kerx' &&
+	test $tbfmt -eq 4 -a $tag != 'kerx' &&
 		err "fatal: attachment allowed in 'kerx' table only (line $lineno)"
 
 	read || err "$eof"; let lineno++
@@ -426,7 +426,7 @@ do
 	test $line != "Orientation" &&
 		err "fatal: kerning orientation expected (line $lineno)"
 	case ${line[@]:1} in
-		V) vertical='yes';;
+		V) flvert='yes';;
 		H) ;;
 		*) err "fatal: bad orientation flag: ${line[@]:1} (line $lineno)";;
 	esac
@@ -441,7 +441,7 @@ do
 	if test $line = "Cross-stream"
 	then
 		case ${line[@]:1} in
-			yes) crossstream='yes';;
+			yes) flcross='yes';;
 			no) ;;
 			*) err "fatal: bad cross-stream flag: ${line[@]:1} (line $lineno)";;
 		esac
@@ -454,7 +454,7 @@ do
 	fi
 
 	# Read classes until a state table header (indented line).
-	readcl '[ 	]*' 'EOT' 'OOB' 'DEL' 'EOL'
+	clread '[ 	]*' 'EOT' 'OOB' 'DEL' 'EOL'
 
 	# Check if the class list and state table header match.
 	line=(${REPLY%%[ 	]\/\/*})
@@ -487,7 +487,7 @@ do
 			state=(${state[@]} $entry)
 		done
 
-		test "${#state[@]}" -ne "$nclasses" &&
+		test "${#state[@]}" -ne "$clcount" &&
 			err "fatal: wrong entry count in state: $line (line $lineno)"
 		states[${#states[@]}]="${state[@]}"
 
@@ -506,7 +506,7 @@ do
 
 	# Check if the entry table header is as expected.
 	line=(${REPLY%%[ 	]\/\/*})
-	if test $tag = 'kerx' -a $tabfmt -eq 4
+	if test $tag = 'kerx' -a $tbfmt -eq 4
 	then
 		case "${line[*]}" in
 			"GoTo Mark? Advance? MatchPoints") acttype=1; vlpack=2;;
@@ -544,7 +544,7 @@ do
 		flpush=(${flpush[@]} ${line[@]:2:1})
 		fladvance=(${fladvance[@]} ${line[@]:3:1})
 		actnames=(${actnames[@]} ${line[@]:4:1})
-		lact=(${lact[@]} $lineno)
+		actlines=(${actlines[@]} $lineno)
 
 		read || err "$eof"; let lineno++
 
@@ -572,13 +572,13 @@ do
 		do read || break 2; let lineno++
 		done
 
-		if test $tabfmt -eq 4
+		if test $tbfmt -eq 4
 		then
 			# Expect specific value count in each attachment type.
 			case $acttype in
-				1) nvlreq=1;; # one point per glyph
-				2) nvlreq=1;; # one anchor per glyph
-				4) nvlreq=2;; # two coordinates per glyph
+				1) vlnreq=1;; # point per glyph
+				2) vlnreq=1;; # anchor
+				4) vlnreq=2;; # pair of coordinates
 			esac
 
 			# Read values for both marked and current glyphs.
@@ -587,7 +587,7 @@ do
 				line=(${REPLY%%[ 	]\/\/*})
 				test $line != "${field}" &&
 					err "fatal: values for $field glyph expected (line $lineno)"
-				test ${#line[@]} -ne $(( nvlreq + 1 )) &&
+				test ${#line[@]} -ne $(( vlnreq + 1 )) &&
 					err "fatal: wrong number of values (line $lineno)"
 
 				value=${line[@]:1}
@@ -627,7 +627,7 @@ do
 			line=(${REPLY%%[ 	]\/\/*})
 
 			# Fail on a reset value in a non-cross-stream table.
-			test $crossstream != 'yes' -a -z "${REPLY##*Reset*}" &&
+			test $flcross != 'yes' -a -z "${REPLY##*Reset*}" &&
 				err "fatal: kern reset in a non-cross-stream table (line $lineno)"
 
 			values=(${values[@]} ${line[@]})
@@ -644,14 +644,14 @@ do
 	# Now with the values parsed match their indices to actions.
 	for i in ${!actnames[@]}
 	do
-		vlname=${actnames[$i]}
+		name=${actnames[$i]}
 		action=-1
 
-		if test $vlname != 'none'
+		if test $name != 'none'
 		then
-			indexof $vlname ${vlnames[@]}
+			indexof $name ${vlnames[@]}
 			test $index -eq -1 &&
-				err "fatal: kern values not defined: $vlname (line ${lact[$i]})"
+				err "fatal: kern values not defined: $name (line ${actlines[$i]})"
 			action=$index
 		fi
 
@@ -659,7 +659,7 @@ do
 	done
 
 	# Pre-compute the end-of-list marker count prior to each action.
-	if test $tag = 'kerx' -a $tabfmt -eq 1
+	if test $tag = 'kerx' -a $tbfmt -eq 1
 	then
 		let prev=0 nmarks=0; for i in ${!vlindices[@]}
 		do
@@ -682,18 +682,18 @@ do
 		lucollapse $glstart $glend
 
 		let luhead=6*2 # Size of a segmented lookup table header
-		let mapsize=2*2+$lusize # Mapping size
-		let nmappings=$lusegcount+1 # No. of mappings
+		let lumapsize=2*2+$lusize # Mapping size
+		let lumapcount=$lusegcount+1 # Number of mappings
 	else
 		let luhead=2*2 # Size of a trimmed lookup array header
-		let mapsize=$lusize # Mapping size
-		let nmappings=$glend-$glstart+1 # No. of mappings
+		let lumapsize=$lusize # Mapping size
+		let lumapcount=$glend-$glstart+1 # Number of mappings
 	fi
 
-	let lulen=$luhead+$nmappings*$mapsize # Class lookup table length
+	let lulen=$luhead+$lumapcount*$lumapsize # Class lookup table length
 	let lupad=$lulen/$ver%2*$ver
 	let stoff=$luoff+$lulen+$lupad # State table offset
-	let stlen=${#states[@]}*$nclasses*$trsize # State table length
+	let stlen=${#states[@]}*$clcount*$trsize # State table length
 	let stpad=$stlen/$ver%2*$ver
 	let etoff=$stoff+$stlen+$stpad # Entry table offset
 	let etlen=${#gotos[@]}*$etsize # Entry table length
@@ -702,24 +702,24 @@ do
 	let vllen=${#values[@]}*$vlsize # Values length
 	let vllen+=$eolmarkcount*$vlsize # the end-of-list markers, if any
 	let vlpad=$vllen/$ver%2*$ver
-	let tablen=$tabhead+$vloff+$vllen+$vlpad # Subtable length
+	let tblen=$tbhead+$vloff+$vllen+$vlpad # Subtable length
 
 	# Start printing the subtable with headers and the class lookups.
-	printf "\n\t<!-- Subtable No. %d -->\n" $(( ++tabno ))
+	printf "\n\t<!-- Subtable No. %d -->\n" $(( ++tbno ))
 
 	printf "\n\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-		$off $tablen "Subtable length" && let off+=4
+		$off $tblen "Subtable length" && let off+=4
 
-	flcover=0
-	test $vertical = 'yes' && let flcover+=16#80
-	test $crossstream = 'yes' && let flcover+=16#40
+	flags=0
+	test $flvert = 'yes' && let flags+=16#80
+	test $flcross = 'yes' && let flags+=16#40
 
 	test $tag = 'kerx' &&
-		(( flcover <<= 16 )) # extended coverage field
+		(( flags <<= 16 )) # extended coverage field
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*ver - 2 )) $flcover "Coverage" \
-		$(( off += 2*ver - 1 )) 2 $tabfmt "Format" && let off+=1
+		$off $(( 4*ver - 2 )) $flags "Coverage" \
+		$(( off += 2*ver - 1 )) 2 $tbfmt "Format" && let off+=1
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
 		$off $(( 4*ver )) 0 "Variation tuple index" && let off+=2*$ver
@@ -729,7 +729,7 @@ do
 
 	printf "\n"
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*ver )) $nclasses "Class count" \
+		$off $(( 4*ver )) $clcount "Class count" \
 		$(( off += 2*ver )) $(( 4*ver )) $luoff "Class lookup offset" \
 		$(( off += 2*ver )) $(( 4*ver )) $stoff "State table offset" \
 		$(( off += 2*ver )) $(( 4*ver )) $etoff "Entry table offset" \
@@ -738,18 +738,18 @@ do
 	# Print either the modern or the legacy lookup array.
 	if test $tag = 'kerx'
 	then
-		printlu
+		luprint
 	else
 		printf "\n"
 		printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
 			$off $glstart "First glyph" \
-			$(( off += 2 )) $nmappings "Glyph count" && let off+=2
+			$(( off += 2 )) $lumapcount "Glyph count" && let off+=2
 
 		for i in $(seq $glstart $glend)
 		do
 			class=${luarr[$i]-1}
 			printf "\t<dataline offset=\"%08X\" hex=\"%02X\"/> <!-- %s -->\n" \
-				$off $class "${glnames[$i]}: ${clnames[$class]}" && let off+=$mapsize
+				$off $class "${glnames[$i]}: ${clnames[$class]}" && let off+=$lumapsize
 		done
 	fi
 
@@ -760,16 +760,16 @@ do
 
 	# Print at least stubs of class names along the transitions.
 	printf "\n\t                            <!-- "
-	for clname in ${clnames[@]}
-	do printf "%-*.*s " $(( 2*ver )) $(( 2*ver )) $clname
+	for name in ${clnames[@]}
+	do printf "%-*.*s " $(( 2*ver )) $(( 2*ver )) $name
 	done
 	printf " -->\n"
 
 	for i in ${!states[@]}
 	do
 		printf "\t<dataline offset=\"%08X\" hex=\"" $off
-		for gtno in ${states[$i]}
-		do printf "%0*X " $(( trsize * 2 )) $gtno && let off+=$trsize
+		for trans in ${states[$i]}
+		do printf "%0*X " $(( trsize * 2 )) $trans && let off+=$trsize
 		done
 		printf "\"/> <!-- %s -->\n" ${stnames[$i]}
 	done
@@ -794,7 +794,7 @@ do
 			if test $action -ge 0
 			then
 				let vlindex=${vlindices[$action]}
-				if test $tabfmt -eq 4
+				if test $tbfmt -eq 4
 				then
 					let vlindex/=$vlpack
 				else
@@ -808,7 +808,7 @@ do
 				$off $goto $flags $vlindex $i ${gtnames[$i]} && let off+=$etsize
 		else
 			# Use byte offsets for the old table.
-			let goto=$stoff+$goto*$nclasses
+			let goto=$stoff+$goto*$clcount
 
 			test $action -ge 0 &&
 				let flags+=$vloff+${vlindices[$action]}*$vlsize
@@ -849,7 +849,7 @@ do
 
 			printf "%04X " $value && let off+=$vlsize
 
-			test $tag = 'kerx' -a $tabfmt -eq 1 -a $(( v + 1 )) -eq $nextval &&
+			test $tag = 'kerx' -a $tbfmt -eq 1 -a $(( v + 1 )) -eq $nextval &&
 				printf "%04X" $(( 16#FFFF )) && let off+=$vlsize # end-of-list marker
 
 			let v++
