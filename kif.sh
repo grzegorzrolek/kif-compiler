@@ -30,7 +30,7 @@ indexof () {
 	index=-1
 }
 
-tag='kerx'; v=2 # Table version, 'kerx' by default
+tag='kerx'; ver=2 # Table version, 'kerx' by default
 
 # Parse and reset the arguments.
 args=$(getopt np:a:l $*)
@@ -44,7 +44,7 @@ do
 		-n) dry='yes'; shift;;
 		-p) post=$2; shift 2;;
 		-a) ankfile=$2; shift 2;;
-		-l) tag='kern'; v=1; shift;;
+		-l) tag='kern'; ver=1; shift;;
 		--) shift; break;;
 	esac
 done
@@ -323,17 +323,17 @@ then
 
 	let nanchors=${#anchors[@]}/2 # No. of all the anchors
 	printf "\n"
-	let val=0; for i in ${!ankindices[@]}
+	let v=0; for i in ${!ankindices[@]}
 	do
 		nextank=${ankindices[$(( i + 1 ))]=$nanchors}
 		printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-			$off $(( nextank - val/2 )) ${clnames[$i]} && let off+=4
+			$off $(( nextank - v/2 )) ${clnames[$i]} && let off+=4
 
-		while test $(( val / 2 )) -lt $nextank
+		while test $(( v / 2 )) -lt $nextank
 		do
-			xval=${anchors[$val]}
-			yval=${anchors[$(( val + 1 ))]}
-			let val+=2
+			xval=${anchors[$v]}
+			yval=${anchors[$(( v + 1 ))]}
+			let v+=2
 
 			# Make a 2's complement for a negative value.
 			test $xval -lt 0 && let xval=16#10000+$xval
@@ -366,16 +366,16 @@ done
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
-let tabhead=4+2*2*$v # Subtable header size
-let luoff=5*2*$v # Lookup table offset (length of a state table header)
-let lusize=1*$v # Size of the lookup value
-let trsize=1*$v # Transition size
-let etsize=2+2*$v # Full entry size in the entry table
+let tabhead=4+2*2*$ver # Subtable header size
+let luoff=5*2*$ver # Lookup table offset (length of a state table header)
+let lusize=1*$ver # Size of the lookup value
+let trsize=1*$ver # Transition size
+let etsize=2+2*$ver # Full entry size in the entry table
 let vlsize=2 # Value size
 
 # Print the table header before reading subtables.
 printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
-	$off $v 0 "Table version" && let off+=4
+	$off $ver 0 "Table version" && let off+=4
 
 printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
 	$off $(grep -c '^Type[ 	]' $kif) "No. of subtables" && let off+=4
@@ -691,17 +691,17 @@ do
 	fi
 
 	let lulen=$luhead+$nmappings*$mapsize # Class lookup table length
-	let lupad=$lulen/$v%2*$v # Padding
+	let lupad=$lulen/$ver%2*$ver
 	let stoff=$luoff+$lulen+$lupad # State table offset
 	let stlen=${#states[@]}*$nclasses*$trsize # State table length
-	let stpad=$stlen/$v%2*$v # Padding
+	let stpad=$stlen/$ver%2*$ver
 	let etoff=$stoff+$stlen+$stpad # Entry table offset
 	let etlen=${#gotos[@]}*$etsize # Entry table length
-	let etpad=$etlen/$v%2*$v # Padding
+	let etpad=$etlen/$ver%2*$ver
 	let vloff=$etoff+$etlen+$etpad # Kern values offset
 	let vllen=${#values[@]}*$vlsize # Values length
 	let vllen+=$eolmarkcount*$vlsize # the end-of-list markers, if any
-	let vlpad=$vllen/$v%2*$v # Padding
+	let vlpad=$vllen/$ver%2*$ver
 	let tablen=$tabhead+$vloff+$vllen+$vlpad # Subtable length
 
 	# Start printing the subtable with headers and the class lookups.
@@ -718,22 +718,22 @@ do
 		(( flcover <<= 16 )) # extended coverage field
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*v - 2 )) $flcover "Coverage" \
-		$(( off += 2*v - 1 )) 2 $tabfmt "Format" && let off+=1
+		$off $(( 4*ver - 2 )) $flcover "Coverage" \
+		$(( off += 2*ver - 1 )) 2 $tabfmt "Format" && let off+=1
 
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*v )) 0 "Variation tuple index" && let off+=2*$v
+		$off $(( 4*ver )) 0 "Variation tuple index" && let off+=2*$ver
 
 	test $acttype &&
 		vloff=$(( vloff + (acttype << 29) )) # first two bits
 
 	printf "\n"
 	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*v )) $nclasses "Class count" \
-		$(( off += 2*v )) $(( 4*v )) $luoff "Class lookup offset" \
-		$(( off += 2*v )) $(( 4*v )) $stoff "State table offset" \
-		$(( off += 2*v )) $(( 4*v )) $etoff "Entry table offset" \
-		$(( off += 2*v )) $(( 4*v )) $vloff "Values offset" && let off+=2*$v
+		$off $(( 4*ver )) $nclasses "Class count" \
+		$(( off += 2*ver )) $(( 4*ver )) $luoff "Class lookup offset" \
+		$(( off += 2*ver )) $(( 4*ver )) $stoff "State table offset" \
+		$(( off += 2*ver )) $(( 4*ver )) $etoff "Entry table offset" \
+		$(( off += 2*ver )) $(( 4*ver )) $vloff "Values offset" && let off+=2*$ver
 
 	# Print either the modern or the legacy lookup array.
 	if test $tag = 'kerx'
@@ -761,7 +761,7 @@ do
 	# Print at least stubs of class names along the transitions.
 	printf "\n\t                            <!-- "
 	for clname in ${clnames[@]}
-	do printf "%-*.*s " $(( 2*v )) $(( 2*v )) $clname
+	do printf "%-*.*s " $(( 2*ver )) $(( 2*ver )) $clname
 	done
 	printf " -->\n"
 
@@ -823,14 +823,14 @@ do
 			$off $(( etpad * 2 )) 0 && let off+=$etpad
 
 	printf "\n"
-	let val=0; for i in ${!vlindices[@]}
+	let v=0; for i in ${!vlindices[@]}
 	do
 		printf "\t<dataline offset=\"%08X\" hex=\"" $off
 
 		nextval=${vlindices[(( i+1 ))]=${#values[@]}}
-		while test $val -lt $nextval
+		while test $v -lt $nextval
 		do
-			value=${values[$val]}
+			value=${values[$v]}
 
 			test $value = 'Reset' &&
 				let value=16#8000 # cross-stream reset flag
@@ -843,16 +843,16 @@ do
 				# Unset the least significant bit of each value.
 				let value-=$value%2
 
-				test $(( val + 1 )) -eq $nextval &&
+				test $(( v + 1 )) -eq $nextval &&
 					let value+=1 # list-ending flag
 			fi
 
 			printf "%04X " $value && let off+=$vlsize
 
-			test $tag = 'kerx' -a $tabfmt -eq 1 -a $(( val + 1 )) -eq $nextval &&
+			test $tag = 'kerx' -a $tabfmt -eq 1 -a $(( v + 1 )) -eq $nextval &&
 				printf "%04X" $(( 16#FFFF )) && let off+=$vlsize # end-of-list marker
 
-			let val++
+			let v++
 		done
 
 		printf "\"/> <!-- %s -->\n" ${vlnames[$i]}
