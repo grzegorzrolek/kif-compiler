@@ -158,6 +158,20 @@ lucollapse () {
 	done
 }
 
+# printd: print data with format, length, comment, and values as appropriate
+printd () {
+	local form=$1 len=$2 comm=$3; shift 3
+
+	test -n "$comm" &&
+		comm=" <!-- $comm -->"
+
+	printf "\t<dataline offset=\"%08X\" hex=\"" $off
+	printf "$form" "$@"
+	printf "\"/>$comm\n"
+
+	let off+=$len
+}
+
 # luprint array: print lookups from either $lusegs or array
 luprint () {
 	local arrname=$1; test $arrname &&
@@ -167,23 +181,21 @@ luprint () {
 	bscalc $lumapsize $lusegcount
 
 	printf "\n"
-	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
-		$off 2 "Lookup format" \
-		$(( off += 2 )) $lumapsize "Unit size" \
-		$(( off += 2 )) $lusegcount "No. of units" \
-		$(( off += 2 )) $bsrange "Search range" \
-		$(( off += 2 )) $bssel "Entry selector" \
-		$(( off += 2 )) $bsshift "Range shift" && let off+=2
+
+	printd "%04X" 2 "Lookup format" 2
+	printd "%04X" 2 "Unit size" $lumapsize
+	printd "%04X" 2 "No. of units" $lusegcount
+	printd "%04X" 2 "Search range"  $bsrange
+	printd "%04X" 2 "Entry selector" $bssel
+	printd "%04X" 2 "Range shift" $bsshift
 
 	for i in ${!lusegs[@]}
 	do
 		local s=(${lusegs[$i]})
 		local names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
-		printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-			$off ${s[@]:0:2} ${arr[$i]-${s[2]}} "$names" && let off+=$lumapsize
+		printd "%04X %04X %04X" $lumapsize "$names" ${s[@]:0:2} ${arr[$i]-${s[2]}}
 	done
-	printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %s -->\n" \
-		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$lumapsize
+	printd "%04X %04X %04X" $lumapsize "Guardian value" $(( 16#FFFF )) $(( 16#FFFF ))
 }
 
 # pad len: print zeros for byte-length of len
@@ -191,8 +203,7 @@ pad () {
 	local len=$1
 
 	test $len -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
-			$off $(( len * 2 )) 0 && let off+=$len
+		printd "%0*X" $len "" $(( len * 2 )) 0
 }
 
 
@@ -221,9 +232,8 @@ then
 	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 	printf "<genericSFNTTable tag=\"ankr\">\n"
 
-	printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
-		$off 0 "Table version" \
-		$(( off += 2 )) 0 "Flags" && let off+=2
+	printd "%04X" 2 "Table version" 0
+	printd "%04X" 2 "Flags" 0
 
 	# Read classes until the the anchor listing shows up.
 	clread 'AnchorList*'
@@ -310,9 +320,8 @@ then
 	let lupad=$lulen/2%2*2 # Padding
 	let ankoff=$luoff+$lulen+$lupad # Anchor table offset
 
-	printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-		$off $luoff "Anchor lookup offset" \
-		$(( off += 4 )) $ankoff "Anchors offset" && let off+=4
+	printd "%08X" 4 "Anchor lookup offset" $luoff
+	printd "%08X" 4 "Anchors offset" $ankoff
 
 	# Translate anchor indices to offsets.
 	for i in ${!lusegs[@]}
@@ -332,8 +341,7 @@ then
 	let v=0; for i in ${!ankindices[@]}
 	do
 		nextank=${ankindices[$(( i + 1 ))]=$nanchors}
-		printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-			$off $(( nextank - v/2 )) ${clnames[$i]} && let off+=4
+		printd "%08X" 4 "${clnames[$i]}" $(( nextank - v/2 ))
 
 		while test $(( v / 2 )) -lt $nextank
 		do
@@ -345,8 +353,7 @@ then
 			test $xval -lt 0 && let xval=16#10000+$xval
 			test $yval -lt 0 && let yval=16#10000+$yval
 
-			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X\"/>\n" \
-				$off $xval $yval && let off+=4
+			printd "%04X %04X" 4 "" $xval $yval
 		done
 	done
 
@@ -372,19 +379,15 @@ done
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
 
+printd "%04X%04X" 4 "Table version" $ver 0
+printd "%08X" 4 "No. of subtables" $(grep -c '^Type[ 	]' $kif)
+
 let tbhead=4+2*2*$ver # Subtable header size
 let luoff=5*2*$ver # Lookup table offset (length of a state table header)
 let lusize=1*$ver # Size of the lookup value
 let trsize=1*$ver # Transition size
 let etsize=2+2*$ver # Full entry size in the entry table
 let vlsize=2 # Value size
-
-# Print the table header before reading subtables.
-printf "\t<dataline offset=\"%08X\" hex=\"%04X%04X\"/> <!-- %s -->\n" \
-	$off $ver 0 "Table version" && let off+=4
-
-printf "\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-	$off $(grep -c '^Type[ 	]' $kif) "No. of subtables" && let off+=4
 
 # Read the file subtable by subtable to the end of file.
 while test "$REPLY" -a -z "${REPLY##Type[ 	]*}"
@@ -710,11 +713,9 @@ do
 	let vlpad=$vllen/$ver%2*$ver
 	let tblen=$tbhead+$vloff+$vllen+$vlpad # Subtable length
 
-	# Start printing the subtable with headers and the class lookups.
-	printf "\n\t<!-- Subtable No. %d -->\n" $(( ++tbno ))
-
-	printf "\n\t<dataline offset=\"%08X\" hex=\"%08X\"/> <!-- %s -->\n" \
-		$off $tblen "Subtable length" && let off+=4
+	printf "\n"
+	printf "\t<!-- Subtable No. %d -->\n" $(( ++tbno ))
+	printf "\n"
 
 	flags=0
 	test $flvert = 'yes' && let flags+=16#80
@@ -723,23 +724,21 @@ do
 	test $tag = 'kerx' &&
 		(( flags <<= 16 )) # extended coverage field
 
-	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*ver - 2 )) $flags "Coverage" \
-		$(( off += 2*ver - 1 )) 2 $tbfmt "Format" && let off+=1
-
-	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*ver )) 0 "Variation tuple index" && let off+=2*$ver
+	printd "%08X" 4 "Subtable length" $tblen
+	printd "%0*X" $(( 2*ver - 1 )) "Coverage" $(( 4*ver - 2 )) $flags
+	printd "%02X" 1 "Format" $tbfmt
+	printd "%0*X" $(( 2*ver )) "Variation tuple index" $(( 4*ver )) 0
 
 	test $acttype &&
 		vloff=$(( vloff + (acttype << 29) )) # first two bits
 
 	printf "\n"
-	printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/> <!-- %s -->\n" \
-		$off $(( 4*ver )) $clcount "Class count" \
-		$(( off += 2*ver )) $(( 4*ver )) $luoff "Class lookup offset" \
-		$(( off += 2*ver )) $(( 4*ver )) $stoff "State table offset" \
-		$(( off += 2*ver )) $(( 4*ver )) $etoff "Entry table offset" \
-		$(( off += 2*ver )) $(( 4*ver )) $vloff "Values offset" && let off+=2*$ver
+
+	printd "%0*X" $(( 2*ver )) "Class count" $(( 4*ver )) $clcount
+	printd "%0*X" $(( 2*ver )) "Class lookup offset" $(( 4*ver )) $luoff
+	printd "%0*X" $(( 2*ver )) "State table offset" $(( 4*ver )) $stoff
+	printd "%0*X" $(( 2*ver )) "Entry table offset" $(( 4*ver )) $etoff
+	printd "%0*X" $(( 2*ver )) "Values offset" $(( 4*ver )) $vloff
 
 	# Print either the modern or the legacy lookup array.
 	if test $tag = 'kerx'
@@ -747,15 +746,14 @@ do
 		luprint
 	else
 		printf "\n"
-		printf "\t<dataline offset=\"%08X\" hex=\"%04X\"/> <!-- %s -->\n" \
-			$off $glstart "First glyph" \
-			$(( off += 2 )) $lumapcount "Glyph count" && let off+=2
+
+		printd "%04X" 2 "First glyph" $glstart
+		printd "%04X" 2 "Glyph count" $lumapcount
 
 		for i in $(seq $glstart $glend)
 		do
 			class=${luarr[$i]-1}
-			printf "\t<dataline offset=\"%08X\" hex=\"%02X\"/> <!-- %s -->\n" \
-				$off $class "${glnames[$i]}: ${clnames[$class]}" && let off+=$lumapsize
+			printd "%02X" $lumapsize "${glnames[$i]}: ${clnames[$class]}" $class
 		done
 	fi
 
@@ -770,11 +768,13 @@ do
 
 	for i in ${!states[@]}
 	do
-		printf "\t<dataline offset=\"%08X\" hex=\"" $off
-		for trans in ${states[$i]}
-		do printf "%0*X " $(( trsize * 2 )) $trans && let off+=$trsize
-		done
-		printf "\"/> <!-- %s -->\n" ${stnames[$i]}
+		printd "%0*X " $(( trsize * clcount )) "${stnames[$i]}" $(
+
+			for trans in ${states[$i]}
+			do echo $(( trsize * 2 )) $trans
+			done
+
+			)
 	done
 
 	pad $stpad
@@ -788,6 +788,8 @@ do
 		flags=0
 		test ${flpush[$i]} = 'yes' && let flags+=16#8000
 		test ${fladvance[$i]} = 'yes' || let flags+=16#4000
+
+		comment="$(printf "%02X" $i) ${gtnames[$i]}"
 
 		if test $tag = 'kerx'
 		then
@@ -804,8 +806,7 @@ do
 				let vlindex=16#FFFF
 			fi
 
-			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X %04X\"/> <!-- %02X %s -->\n" \
-				$off $goto $flags $vlindex $i ${gtnames[$i]} && let off+=$etsize
+			printd "%04X %04X %04X" $etsize "$comment" $goto $flags $vlindex
 		else
 			# Use byte offsets for the old table.
 			let goto=$stoff+$goto*$clcount
@@ -813,8 +814,7 @@ do
 			test $action -ge 0 &&
 				let flags+=$vloff+${vlindices[$action]}*$vlsize
 
-			printf "\t<dataline offset=\"%08X\" hex=\"%04X %04X\"/> <!-- %02X %s -->\n" \
-				$off $goto $flags $i ${gtnames[$i]} && let off+=$etsize
+			printd "%04X %04X" $etsize "$comment" $goto $flags
 		fi
 	done
 
@@ -823,37 +823,44 @@ do
 	printf "\n"
 	let v=0; for i in ${!vlindices[@]}
 	do
-		printf "\t<dataline offset=\"%08X\" hex=\"" $off
-
 		nextval=${vlindices[(( i+1 ))]=${#values[@]}}
-		while test $v -lt $nextval
-		do
-			value=${values[$v]}
+		let count=$nextval-${vlindices[$i]}
+		let len=$count*$vlsize
+		test $tag = 'kerx' -a $tbfmt -eq 1 &&
+			let len+=$vlsize # end-of-list value
 
-			test $value = 'Reset' &&
-				let value=16#8000 # cross-stream reset flag
+		printd "%04X " $len "${vlnames[$i]}" $(
 
-			test $value -lt 0 &&
-				let value=16#10000+$value # 2's complement
+			let w=$v; while test $w -lt $nextval
+			do
+				value=${values[$w]}
 
-			if test $tag != 'kerx'
-			then
-				# Unset the least significant bit of each value.
-				let value-=$value%2
+				test $value = 'Reset' &&
+					let value=16#8000 # cross-stream reset flag
 
-				test $(( v + 1 )) -eq $nextval &&
-					let value+=1 # list-ending flag
-			fi
+				test $value -lt 0 &&
+					let value=16#10000+$value # 2\'s complement
 
-			printf "%04X " $value && let off+=$vlsize
+				if test $tag != 'kerx'
+				then
+					# Clear the least significant bit
+					let value-=$value%2
 
-			test $tag = 'kerx' -a $tbfmt -eq 1 -a $(( v + 1 )) -eq $nextval &&
-				printf "%04X" $(( 16#FFFF )) && let off+=$vlsize # end-of-list marker
+					test $(( w + 1 )) -eq $nextval &&
+						let value+=1 # end-of-list flag
+				fi
 
-			let v++
-		done
+				echo $value
 
-		printf "\"/> <!-- %s -->\n" ${vlnames[$i]}
+				test $tag = 'kerx' -a $tbfmt -eq 1 -a $(( w + 1 )) -eq $nextval &&
+					echo $(( 16#FFFF )) # end-of-list value
+
+				let w++
+			done
+
+			)
+
+		let v+=$count
 	done
 
 	pad $vlpad
