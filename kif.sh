@@ -186,6 +186,15 @@ luprint () {
 		$off $(( 16#FFFF )) $(( 16#FFFF )) 0 "Guardian value" && let off+=$lumapsize
 }
 
+# pad len: print zeros for byte-length of len
+pad () {
+	local len=$1
+
+	test $len -ne 0 &&
+		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
+			$off $(( len * 2 )) 0 && let off+=$len
+}
+
 
 # Parse the anchor input file if given.
 if test $ankfile
@@ -316,10 +325,7 @@ then
 	# Print the lookup array, but with offsets instead of indices.
 	luprint 'ankoffsets'
 
-	# Pad the anchor lookups with zeros for word-alignment if necessary.
-	test $lupad -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
-			$off $(( lupad * 2 )) 0 && let off+=$lupad
+	pad $lupad
 
 	let nanchors=${#anchors[@]}/2 # No. of all the anchors
 	printf "\n"
@@ -753,10 +759,7 @@ do
 		done
 	fi
 
-	# Pad the class lookups with zeros for word-alignment if necessary.
-	test $lupad -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
-			$off $(( lupad * 2 )) 0 && let off+=$lupad
+	pad $lupad
 
 	# Print at least stubs of class names along the transitions.
 	printf "\n\t                            <!-- "
@@ -774,10 +777,7 @@ do
 		printf "\"/> <!-- %s -->\n" ${stnames[$i]}
 	done
 
-	# Pad the state table if necessary.
-	test $stpad -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
-			$off $(( stpad * 2 )) 0 && let off+=$stpad
+	pad $stpad
 
 	printf "\n"
 	for i in ${!gotos[@]}
@@ -818,9 +818,7 @@ do
 		fi
 	done
 
-	test $etpad -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
-			$off $(( etpad * 2 )) 0 && let off+=$etpad
+	pad $etpad
 
 	printf "\n"
 	let v=0; for i in ${!vlindices[@]}
@@ -858,9 +856,7 @@ do
 		printf "\"/> <!-- %s -->\n" ${vlnames[$i]}
 	done
 
-	test $vlpad -ne 0 &&
-		printf "\t<dataline offset=\"%08X\" hex=\"%0*X\"/>\n" \
-			$off $(( vlpad * 2 )) 0 && let off+=$vlpad
+	pad $vlpad
 
 done
 
