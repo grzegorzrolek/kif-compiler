@@ -77,6 +77,27 @@ test $postoff ||
 # Parse the 'post' table dump for an array of glyphs names.
 glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
 
+# readline: read next non-blank $line as list of tokens, comments excluded
+readline () {
+	unset line
+
+	read || return; let lineno++
+
+	# Skip comments, blank lines
+	if test "$1" = "-b" # -b: don't skip blank lines
+	then
+		while test "$REPLY" -a -z "${REPLY##\/\/*}"
+		do read || return; let lineno++
+		done
+	else
+		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
+		do read || return; let lineno++
+		done
+	fi
+
+	line=(${REPLY%%[ 	]\/\/*})
+}
+
 # clread term: read classes into $clnames and $luarr until term pattern
 clread () {
 	local term="$1"; shift # termination line pattern
@@ -89,7 +110,6 @@ clread () {
 	# Read classes until a line with the termination pattern found.
 	until test -z "${REPLY##$term}"
 	do
-		line=(${REPLY%%[ 	]\/\/*})
 		if test $line != '+'
 		then
 			clcount=${#clnames[@]}
@@ -107,12 +127,7 @@ clread () {
 			test $index -gt ${glend=$index} && glend=$index
 		done
 
-		read || err "$eof"; let lineno++
-
-		# Skip blanks and comments inbetween.
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || err "$eof"; let lineno++
-		done
+		readline || err "$eof"
 	done
 
 	# Update the number of classes.
@@ -213,7 +228,8 @@ then
 
 	{
 
-	lineno=0 # number of line being parsed
+	line=() # last line read as list of tokens
+	lineno=0 # number of last line read
 	off=0 # current offset
 
 	clrefs=() # Class names as referenced (vs. as defined)
@@ -221,13 +237,8 @@ then
 	ankindices=() # Indices of anchors that start each new class
 	ankoffsets=() # Calculated anchor offsets
 
-	# Read the first line.
-	read; let lineno++
-
-	# Skip blank lines and line comments in front of the input file.
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || break; let lineno++
-	done
+	# Read first line
+	readline
 
 	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 	printf "<genericSFNTTable tag=\"ankr\">\n"
@@ -238,12 +249,8 @@ then
 	# Read classes until the the anchor listing shows up.
 	clread 'AnchorList*'
 
-	# Read the first class reference.
-	read || err "$eof"; let lineno++
-
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"; let lineno++
-	done
+	# Read the first class reference
+	readline || err "$eof"
 
 	# Prevent the first reference from being accidentally indented.
 	test -z "${REPLY##[ 	]*}" &&
@@ -252,7 +259,6 @@ then
 	# Read anchors until the end of file.
 	let loc=0; until test -z "$REPLY"
 	do
-		line=(${REPLY%%[ 	]\/\/*})
 		indexof $line ${clnames[@]}
 		test $index -eq -1 &&
 			err "fatal: class not found: $line (line $lineno)"
@@ -262,27 +268,18 @@ then
 		clrefs[${#clrefs[@]}]=$line
 		ankindices=(${ankindices[@]} $loc)
 
-		read || break; let lineno++
-
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || break 2; let lineno++
-		done
+		readline || break
 
 		# Read coordinates in the indented lines beneath.
 		while test -z "${REPLY##[ 	]*}"
 		do
-			line=(${REPLY%%[ 	]\/\/*})
 			test $(( ${#line[@]} % 2 )) -ne 0 &&
 				err "fatal: wrong number of coordinates (line $lineno)"
 			anchors=(${anchors[@]} ${line[@]})
 
 			let loc++
 
-			read || break 2; let lineno++
-
-			until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-			do read || break 3; let lineno++
-			done
+			readline || break 2
 		done
 	done
 
@@ -365,16 +362,12 @@ fi
 
 {
 
-lineno=0 # number of line being parsed
+line=() # last line read as list of tokens
+lineno=0 # number of last line read
 off=0 # current offset
 
-# Read the first line.
-read; let lineno++
-
-# Skip blank lines and line comments in front of the input file.
-until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-do read || break; let lineno++
-done
+# Read first line of input
+readline
 
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
@@ -412,8 +405,6 @@ do
 	eolmarkcount=0 # End-of-list marker count in total
 	vlpack=1 # Number of values per record; depends on table format
 
-	# Parse the input line, comments excluded.
-	line=(${REPLY%%[ 	]\/\/*})
 	test $line != "Type" &&
 		err "fatal: kerning type expected (line $lineno)"
 	case ${line[@]:1} in
@@ -425,13 +416,8 @@ do
 	test $tbfmt -eq 4 -a $tag != 'kerx' &&
 		err "fatal: attachment allowed in 'kerx' table only (line $lineno)"
 
-	read || err "$eof"; let lineno++
+	readline || err "$eof"
 
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"; let lineno++
-	done
-
-	line=(${REPLY%%[ 	]\/\/*})
 	test $line != "Orientation" &&
 		err "fatal: kerning orientation expected (line $lineno)"
 	case ${line[@]:1} in
@@ -440,13 +426,8 @@ do
 		*) err "fatal: bad orientation flag: ${line[@]:1} (line $lineno)";;
 	esac
 
-	read || err "$eof"; let lineno++
+	readline || err "$eof"
 
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"; let lineno++
-	done
-
-	line=(${REPLY%%[ 	]\/\/*})
 	if test $line = "Cross-stream"
 	then
 		case ${line[@]:1} in
@@ -455,32 +436,22 @@ do
 			*) err "fatal: bad cross-stream flag: ${line[@]:1} (line $lineno)";;
 		esac
 
-		read || err "$eof"; let lineno++
-
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || err "$eof"; let lineno++
-		done
+		readline || err "$eof"
 	fi
 
 	# Read classes until a state table header (indented line).
 	clread '[ 	]*' 'EOT' 'OOB' 'DEL' 'EOL'
 
 	# Check if the class list and state table header match.
-	line=(${REPLY%%[ 	]\/\/*})
 	test "${clnames[*]}" != "${line[*]}" &&
 		err "fatal: classes and state header don't match (line $lineno)"
 
-	read || err "$eof"; let lineno++
-
-	# Skip blanks directly beneath the header.
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"; let lineno++
-	done
+	# Read the first state, skipping any blank lines directly beneath the header
+	readline || err "$eof"
 
 	# Read the state table until either a blank line or an indented one
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
 	do
-		line=(${REPLY%%[ 	]\/\/*})
 		stnames=(${stnames[@]} $line)
 
 		state=()
@@ -500,21 +471,15 @@ do
 			err "fatal: wrong entry count in state: $line (line $lineno)"
 		states[${#states[@]}]="${state[@]}"
 
-		read || err "$eof"; let lineno++
-
-		# Skip comments if any
-		while test "$REPLY" -a -z "${REPLY##\/\/*}"
-		do read || err "$eof"; let lineno++
-		done
+		readline -b || err "$eof"
 	done
 
-	# Skip any additional blank lines
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"; let lineno++
-	done
+	# Skip additional blank lines if necessary
+	if test -z "${REPLY//[ 	]/}"
+	then readline || err "$eof"
+	fi
 
 	# Check if the entry table header is as expected.
-	line=(${REPLY%%[ 	]\/\/*})
 	if test $tag = 'kerx' -a $tbfmt -eq 4
 	then
 		case "${line[*]}" in
@@ -528,17 +493,12 @@ do
 			err "fatal: malformed entry table header (line $lineno)"
 	fi
 
-	read || err "$eof"; let lineno++
-
-	# Skip blanks beneath the header.
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"; let lineno++
-	done
+	# Read the first entry, skipping blank lines beneath the header
+	readline || err "$eof"
 
 	# Read entries until a blank line, or an indented one (the Font Tools way)
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
 	do
-		line=(${REPLY%%[ 	]\/\/*})
 		let entry=${#gotos[@]}+1
 		test $line -eq $entry ||
 			err "fatal: wrong number for entry listed as $entry (line $lineno)"
@@ -555,31 +515,20 @@ do
 		actnames=(${actnames[@]} ${line[@]:4:1})
 		actlines=(${actlines[@]} $lineno)
 
-		read || err "$eof"; let lineno++
-
-		# Skip comments if any
-		while test "$REPLY" -a -z "${REPLY##\/\/*}"
-		do read || err "$eof"; let lineno++
-		done
+		readline -b || err "$eof"
 	done
 
-	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-	do read || err "$eof"; let lineno++
-	done
+	if test -z "${REPLY//[ 	]/}"
+	then readline || err "$eof"
+	fi
 
 	# Read values until the end of file or a next subtable header.
 	until test -z "$REPLY" -o -z "${REPLY##Type[ 	]*}"
 	do
-		line=(${REPLY%%[ 	]\/\/*})
 		vlnames=(${vlnames[@]} $line)
 		vlindices=(${vlindices[@]} ${#values[@]})
 
-		read || break; let lineno++
-
-		# Skip blanks beneath the kern list name.
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || break 2; let lineno++
-		done
+		readline || break
 
 		if test $tbfmt -eq 4
 		then
@@ -593,7 +542,6 @@ do
 			# Read values for both marked and current glyphs.
 			for field in Marked Current
 			do
-				line=(${REPLY%%[ 	]\/\/*})
 				test $line != "${field}" &&
 					err "fatal: values for $field glyph expected (line $lineno)"
 				test ${#line[@]} -ne $(( vlnreq + 1 )) &&
@@ -613,17 +561,10 @@ do
 
 				values=(${values[@]} $value)
 
-				read || if test $field = 'Marked'
+				readline || if test $field = 'Marked'
 					then err "$eof"
 					else break
-					fi; let lineno++
-
-				until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-				do read || if test $field = 'Marked'
-					then err "$eof"
-					else break 2
-					fi; let lineno++
-				done
+					fi
 			done
 
 			# Don't bother with other formats at this point.
@@ -633,20 +574,13 @@ do
 		# Read values in all the indented lines beneath the name.
 		while test -z "${REPLY##[ 	]*}"
 		do
-			line=(${REPLY%%[ 	]\/\/*})
-
 			# Fail on a reset value in a non-cross-stream table.
 			test $flcross != 'yes' -a -z "${REPLY##*Reset*}" &&
 				err "fatal: kern reset in a non-cross-stream table (line $lineno)"
 
 			values=(${values[@]} ${line[@]})
 
-			read || break 2; let lineno++
-
-			# Skip blanks between the values, if any.
-			until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-			do read || break 3; let lineno++
-			done
+			readline || break 2
 		done
 	done
 
