@@ -477,7 +477,7 @@ do
 	do read || err "$eof"; let lineno++
 	done
 
-	# Read the state table until a blank or indented line.
+	# Read the state table until either a blank line or an indented one
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
 	do
 		line=(${REPLY%%[ 	]\/\/*})
@@ -502,13 +502,13 @@ do
 
 		read || err "$eof"; let lineno++
 
-		# Skip line comments, but break on a blank line.
-		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
+		# Skip comments if any
+		while test "$REPLY" -a -z "${REPLY##\/\/*}"
 		do read || err "$eof"; let lineno++
 		done
 	done
 
-	# Skip any more blanks if necessary.
+	# Skip any additional blank lines
 	until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
 	do read || err "$eof"; let lineno++
 	done
@@ -535,7 +535,7 @@ do
 	do read || err "$eof"; let lineno++
 	done
 
-	# Read entries until a blank line, or an indent (the Font Tools way).
+	# Read entries until a blank line, or an indented one (the Font Tools way)
 	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
 	do
 		line=(${REPLY%%[ 	]\/\/*})
@@ -557,8 +557,8 @@ do
 
 		read || err "$eof"; let lineno++
 
-		# Skip comments, but break on a blank.
-		while test "${REPLY//[ 	]/}" -a -z "${REPLY##\/\/*}"
+		# Skip comments if any
+		while test "$REPLY" -a -z "${REPLY##\/\/*}"
 		do read || err "$eof"; let lineno++
 		done
 	done
