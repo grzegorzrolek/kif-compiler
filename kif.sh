@@ -93,6 +93,12 @@ readline () {
 	done
 
 	line=(${REPLY%%[ 	]\/\/*})
+
+	# Include line indent as a null string in front of other tokens
+	test "${REPLY//[ 	]/}" -a -z "${REPLY##[ 	]*}" &&
+		line=("" ${line[@]})
+
+	return 0 # mask status code of the test above
 }
 
 # clread term: read classes into $clnames and $luarr until term pattern
@@ -107,7 +113,7 @@ clread () {
 	# Read classes until a line with the termination pattern found.
 	until test -z "${REPLY##$term}"
 	do
-		if test $line != '+'
+		if test "$line" != '+'
 		then
 			clcount=${#clnames[@]}
 			clnames=(${clnames[@]} $line)
@@ -270,7 +276,7 @@ then
 		# Read coordinates in the indented lines beneath.
 		while test -z "${REPLY##[ 	]*}"
 		do
-			test $(( ${#line[@]} % 2 )) -ne 0 &&
+			test $(( ( ${#line[@]} - 1 ) % 2 )) -ne 0 &&
 				err "fatal: wrong number of coordinates (line $lineno)"
 			anchors=(${anchors[@]} ${line[@]})
 
@@ -402,7 +408,7 @@ do
 	eolmarkcount=0 # End-of-list marker count in total
 	vlpack=1 # Number of values per record; depends on table format
 
-	test $line != "Type" &&
+	test "$line" != 'Type' &&
 		err "fatal: kerning type expected (line $lineno)"
 	case ${line[@]:1} in
 		Contextual) tbfmt=1;;
@@ -415,7 +421,7 @@ do
 
 	readline || err "$eof"
 
-	test $line != "Orientation" &&
+	test "$line" != 'Orientation' &&
 		err "fatal: kerning orientation expected (line $lineno)"
 	case ${line[@]:1} in
 		V) flvert='yes';;
@@ -425,7 +431,7 @@ do
 
 	readline || err "$eof"
 
-	if test $line = "Cross-stream"
+	if test "$line" = 'Cross-stream'
 	then
 		case ${line[@]:1} in
 			yes) flcross='yes';;
@@ -439,8 +445,8 @@ do
 	# Read classes until a state table header (indented line).
 	clread '[ 	]*' 'EOT' 'OOB' 'DEL' 'EOL'
 
-	# Check if the class list and state table header match.
-	test "${clnames[*]}" != "${line[*]}" &&
+	# Check if classes in class listing and state table header match
+	test "${clnames[*]}" != "${line[*]:1}" &&
 		err "fatal: classes and state header don't match (line $lineno)"
 
 	# Read the first state, skipping any blank lines directly beneath the header
@@ -479,14 +485,14 @@ do
 	# Check if the entry table header is as expected.
 	if test $tag = 'kerx' -a $tbfmt -eq 4
 	then
-		case "${line[*]}" in
+		case "${line[*]:1}" in
 			"GoTo Mark? Advance? MatchPoints") acttype=1; vlpack=2;;
 			"GoTo Mark? Advance? MatchAnchors") acttype=2; vlpack=2;;
 			"GoTo Mark? Advance? MatchCoords") acttype=4; vlpack=4;;
 			*) err "fatal: malformed entry table header (line $lineno)";;
 		esac
 	else
-		test "${line[*]}" != "GoTo Push? Advance? KernValues" &&
+		test "${line[*]:1}" != "GoTo Push? Advance? KernValues" &&
 			err "fatal: malformed entry table header (line $lineno)"
 	fi
 
@@ -522,7 +528,7 @@ do
 	# Read values until the end of file or a next subtable header.
 	until test -z "$REPLY" -o -z "${REPLY##Type[ 	]*}"
 	do
-		vlnames=(${vlnames[@]} $line)
+		vlnames=(${vlnames[@]} ${line:-${line[1]}}) # in case of indent on first name
 		vlindices=(${vlindices[@]} ${#values[@]})
 
 		readline || break
@@ -539,12 +545,12 @@ do
 			# Read values for both marked and current glyphs.
 			for field in Marked Current
 			do
-				test $line != "${field}" &&
+				test "${line[1]}" != "${field}" &&
 					err "fatal: values for $field glyph expected (line $lineno)"
-				test ${#line[@]} -ne $(( vlnreq + 1 )) &&
+				test $(( ${#line[@]} - 2 )) -ne $vlnreq &&
 					err "fatal: wrong number of values (line $lineno)"
 
-				value=${line[@]:1}
+				value=${line[@]:2}
 
 				if test $acttype -eq 1 -o $acttype -eq 2
 				then
