@@ -255,12 +255,12 @@ then
 	# Read the first class reference
 	readline || err "$eof"
 
-	# Prevent the first reference from being accidentally indented.
-	test -z "${REPLY##[ 	]*}" &&
+	# Prevent the class reference from being mistakenly indented
+	test -z "$line" &&
 		err "fatal: class reference expected (line $lineno)"
 
-	# Read anchors until the end of file.
-	let loc=0; until test -z "$REPLY"
+	# Read anchor data until end of file
+	let loc=0; while test "$line"
 	do
 		indexof $line ${clnames[@]}
 		test $index -eq -1 &&
@@ -273,8 +273,8 @@ then
 
 		readline || break
 
-		# Read coordinates in the indented lines beneath.
-		while test -z "${REPLY##[ 	]*}"
+		# Read coordinates in lines indented beneath the class reference
+		while test -z "$line"
 		do
 			test $(( ( ${#line[@]} - 1 ) % 2 )) -ne 0 &&
 				err "fatal: wrong number of coordinates (line $lineno)"
@@ -385,8 +385,8 @@ let trsize=1*$ver # Transition size
 let etsize=2+2*$ver # Full entry size in the entry table
 let vlsize=2 # Value size
 
-# Read the file subtable by subtable to the end of file.
-while test "$REPLY" -a -z "${REPLY##Type[ 	]*}"
+# Read the file subtable by subtable
+while test "$line" = 'Type'
 do
 
 	flvert='no'
@@ -453,7 +453,7 @@ do
 	readline || err "$eof"
 
 	# Read the state table until either a blank line or an indented one
-	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
+	until test -z "${line[*]}" -o -z "$line"
 	do
 		stnames=(${stnames[@]} $line)
 
@@ -478,7 +478,7 @@ do
 	done
 
 	# Skip additional blank lines if necessary
-	if test -z "${REPLY//[ 	]/}"
+	if test -z "${line[*]}"
 	then readline || err "$eof"
 	fi
 
@@ -500,7 +500,7 @@ do
 	readline || err "$eof"
 
 	# Read entries until a blank line, or an indented one (the Font Tools way)
-	until test -z "${REPLY//[ 	]/}" -o -z "${REPLY##[ 	]*}"
+	until test -z "${line[*]}" -o -z "$line"
 	do
 		let entry=${#gotos[@]}+1
 		test $line -eq $entry ||
@@ -521,12 +521,12 @@ do
 		readline -b || err "$eof"
 	done
 
-	if test -z "${REPLY//[ 	]/}"
+	if test -z "${line[*]}"
 	then readline || err "$eof"
 	fi
 
-	# Read values until the end of file or a next subtable header.
-	until test -z "$REPLY" -o -z "${REPLY##Type[ 	]*}"
+	# Read values until either next subtable header or end of file
+	until test "$line" = 'Type'
 	do
 		vlnames=(${vlnames[@]} ${line:-${line[1]}}) # in case of indent on first name
 		vlindices=(${vlindices[@]} ${#values[@]})
@@ -574,12 +574,15 @@ do
 			continue
 		fi
 
-		# Read values in all the indented lines beneath the name.
-		while test -z "${REPLY##[ 	]*}"
+		# Read values in lines indented beneath the name
+		while test -z "$line"
 		do
-			# Fail on a reset value in a non-cross-stream table.
-			test $flcross != 'yes' -a -z "${REPLY##*Reset*}" &&
-				err "fatal: kern reset in a non-cross-stream table (line $lineno)"
+			# Fail on Reset value in a non-cross-stream table
+			test $flcross != 'yes' &&
+				for value in ${line[@]}
+				do test $value = 'Reset' &&
+					err "fatal: kern reset in a non-cross-stream table (line $lineno)"
+				done
 
 			values=(${values[@]} ${line[@]})
 
