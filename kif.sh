@@ -79,21 +79,18 @@ glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post)
 
 # readline: read next non-blank $line as list of tokens, comments excluded
 readline () {
+	test "$1" = '-b' && # -b: don't skip blank lines
+		local blank='yes'
+
 	unset line
 
 	read || return; let lineno++
 
-	# Skip comments, blank lines
-	if test "$1" = "-b" # -b: don't skip blank lines
-	then
-		while test "$REPLY" -a -z "${REPLY##\/\/*}"
-		do read || return; let lineno++
-		done
-	else
-		until test "${REPLY//[ 	]/}" -a "${REPLY##\/\/*}"
-		do read || return; let lineno++
-		done
-	fi
+	# Skip comments as well as blank lines if not requested otherwise
+	while test "$REPLY" -a -z "${REPLY##\/\/*}" -o \
+		! "$blank" -a -z "${REPLY//[ 	]/}"
+	do read || return; let lineno++
+	done
 
 	line=(${REPLY%%[ 	]\/\/*})
 }
