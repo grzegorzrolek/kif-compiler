@@ -101,17 +101,21 @@ readline () {
 	return 0 # mask status code of the test above
 }
 
-# clread term: read classes into $clnames and $luarr until term pattern
+# clread: read classes into $clnames and $luarr until indented line
 clread () {
-	local term="$1"; shift # termination line pattern
+	if test "$1" = '-u' # -u term: read until term line instead
+	then
+		local term="$2"
+		shift 2
+	fi
 
 	clnames=($@) # Class names, with the ones provided
 	clcount=$# # Number of classes
 	unset glstart glend # First/last glyph with a class assigned
 	luarr=() # Glyph-to-class index lookup array
 
-	# Read classes until a line with the termination pattern found.
-	until test -z "${REPLY##$term}"
+	# Read classes until either the given term line or line with an indent
+	until test "$term" -a "$term" = "${line[*]}" -o -z "$line"
 	do
 		if test "$line" != '+'
 		then
@@ -249,8 +253,8 @@ then
 	printd "%04X" 2 "Table version" 0
 	printd "%04X" 2 "Flags" 0
 
-	# Read classes until the the anchor listing shows up.
-	clread 'AnchorList*'
+	# Read classes until anchor listing header
+	clread -u 'AnchorList'
 
 	# Read the first class reference
 	readline || err "$eof"
@@ -442,8 +446,8 @@ do
 		readline || err "$eof"
 	fi
 
-	# Read classes until a state table header (indented line).
-	clread '[ 	]*' 'EOT' 'OOB' 'DEL' 'EOL'
+	# Read classes until state table header, the four default classes included
+	clread 'EOT' 'OOB' 'DEL' 'EOL'
 
 	# Check if classes in class listing and state table header match
 	test "${clnames[*]}" != "${line[*]:1}" &&
