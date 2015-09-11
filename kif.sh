@@ -111,8 +111,9 @@ clread () {
 
 	clnames=($@) # Class names, with the ones provided
 	clcount=$# # Number of classes
-	unset glstart glend # First/last glyph with a class assigned
-	luarr=() # Glyph-to-class index lookup array
+
+	luarr=() # glyph-to-class index lookup array
+	unset lustart luend # first, last glyph with a class assigned
 
 	# Read classes until either the given term line or line with an indent
 	until test "$term" -a "$term" = "${line[*]}" -o -z "$line"
@@ -130,8 +131,10 @@ clread () {
 				err "fatal: glyph not found: $glyph (line $lineno)"
 			let index-=$postoff
 			luarr[$index]=$clcount
-			test $index -lt ${glstart=$index} && glstart=$index
-			test $index -gt ${glend=$index} && glend=$index
+			test $index -lt ${lustart=$index} &&
+				lustart=$index
+			test $index -gt ${luend=$index} &&
+				luend=$index
 		done
 
 		readline || err "$eof"
@@ -154,10 +157,9 @@ bscalc () {
 
 # lucollapse: filter out segments from $luarr into $lusegs
 lucollapse () {
-	local start=$1 end=$2
 	lusegs=() # lookup segments
 	lusegcount=0
-	local i=$start; while test $i -le $end
+	local i=$lustart; while test $i -le $luend
 	do
 		unset value; local value=${luarr[$i]}
 
@@ -291,7 +293,7 @@ then
 	done
 
 	# Resolve classes as defined into classes as referenced.
-	let i=$glstart; while test $i -le $glend
+	let i=$lustart; while test $i -le $luend
 	do
 		# Skip null values or they'll default to zero.
 		if test -z "${luarr[$i]}"
@@ -312,8 +314,8 @@ then
 	# Use only the referenced class names from now on.
 	clnames=(${clrefs[@]}); unset clrefs
 
-	# Filter out segments from the lookup array.
-	lucollapse $glstart $glend
+	# Filter out ranges of glyphs with same class from the lookup array
+	lucollapse
 
 	let luoff=12 # Lookup table offset, constant
 	let luhead=6*2 # Size of a bsearch lookup table header
@@ -631,8 +633,8 @@ do
 
 	if test $tag = 'kerx'
 	then
-		# Filter out glyph segments for the class lookups.
-		lucollapse $glstart $glend
+		# Filter out glyph ranges of same class
+		lucollapse
 
 		let luhead=6*2 # Size of a segmented lookup table header
 		let lumapsize=2*2+$lusize # Mapping size
@@ -640,7 +642,7 @@ do
 	else
 		let luhead=2*2 # Size of a trimmed lookup array header
 		let lumapsize=$lusize # Mapping size
-		let lumapcount=$glend-$glstart+1 # Number of mappings
+		let lumapcount=$luend-$lustart+1 # Number of mappings
 	fi
 
 	let lulen=$luhead+$lumapcount*$lumapsize # Class lookup table length
@@ -691,10 +693,10 @@ do
 	else
 		printf "\n"
 
-		printd "%04X" 2 "First glyph" $glstart
+		printd "%04X" 2 "First glyph" $lustart
 		printd "%04X" 2 "Glyph count" $lumapcount
 
-		for i in $(seq $glstart $glend)
+		for i in $(seq $lustart $luend)
 		do
 			class=${luarr[$i]-1}
 			printd "%02X" $lumapsize "${glnames[$i]}: ${clnames[$class]}" $class
