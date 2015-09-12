@@ -10,11 +10,11 @@ EOF
 )
 
 
-eof="fatal: premature end of file"
+eof="premature end of file"
 
 # err message: print message to stderr and exit
 err () {
-	echo >&2 $0: $1
+	echo >&2 $0: "fatal: $1"
 	exit ${2-1}
 }
 
@@ -60,19 +60,19 @@ kerx="$(dirname "$ttf")/$tag.xml"
 test $tag = 'kerx' -a "$ankfile" &&
 	ankr="$(dirname "$ttf")/ankr.xml"
 
-# Dump the 'post' table, if not given explicitly.
+# Dump the 'post' table if necessary
 if test -z "$post" -a "$ttf"
 then
 	post="$(dirname $ttf)/post.xml"
 	type ftxdumperfuser &>/dev/null ||
-		err "fatal: couldn't find the ftxdumperfuser"
+		err "could not find ftxdumperfuser"
 	ftxdumperfuser -t post -o $post $ttf
 fi
 
-# Find the line offset to the first glyph name record in the 'post' dump.
+# Find out how many lines need to be offset for a 'post' dump-based glyph lookup
 postoff=$(grep -n '\.notdef' $post | cut -d : -f 1)
 test $postoff ||
-	err "fatal: required glyph .notdef missing"
+	err ".notdef glyph missing"
 
 # Parse the 'post' table dump for an array of glyphs names.
 glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
@@ -128,7 +128,7 @@ clread () {
 		do
 			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
 			test $index ||
-				err "fatal: glyph not found: $glyph (line $lineno)"
+				err "glyph not found: $glyph (line $lineno)"
 			let index-=$postoff
 			luarr[$index]=$clcount
 			test $index -lt ${lustart=$index} &&
@@ -269,17 +269,17 @@ then
 
 	# Prevent the class reference from being mistakenly indented
 	test $? -eq 0 -a -z "$line" &&
-		err "fatal: class reference expected (line $lineno)"
+		err "class reference expected (line $lineno)"
 
 	# Read anchor data until end of file
 	let loc=0; while test "$line"
 	do
 		indexof $line ${clnames[@]}
 		test $index -eq -1 &&
-			err "fatal: class not found: $line (line $lineno)"
+			err "class not found: $line (line $lineno)"
 		indexof $line ${clrefs[@]}
 		test $index -ne -1 &&
-			err "fatal: class referenced twice: $line (line $lineno)"
+			err "class referenced twice: $line (line $lineno)"
 		clrefs[${#clrefs[@]}]=$line
 		ankindices=(${ankindices[@]} $loc)
 
@@ -289,7 +289,7 @@ then
 		while test -z "$line"
 		do
 			test $(( ( ${#line[@]} - 1 ) % 2 )) -ne 0 &&
-				err "fatal: wrong number of coordinates (line $lineno)"
+				err "non-even number of coordinates (line $lineno)"
 			anchors=(${anchors[@]} ${line[@]})
 
 			let loc++
@@ -421,24 +421,24 @@ do
 	vlpack=1 # Number of values per record; depends on table format
 
 	test "$line" != 'Type' &&
-		err "fatal: kerning type expected (line $lineno)"
+		err "kerning type expected (line $lineno)"
 	case ${line[@]:1} in
 		Contextual) tbfmt=1;;
 		Attachment) tbfmt=4;;
-		*) err "fatal: unknown kerning type: ${line[@]:1} (line $lineno)";;
+		*) err "unknown kerning type: ${line[@]:1} (line $lineno)";;
 	esac
 
 	test $tbfmt -eq 4 -a $tag != 'kerx' &&
-		err "fatal: attachment allowed in 'kerx' table only (line $lineno)"
+		err "attachment allowed in 'kerx' table only (line $lineno)"
 
 	readline || err "$eof (line $lineno)"
 
 	test "$line" != 'Orientation' &&
-		err "fatal: kerning orientation expected (line $lineno)"
+		err "kerning orientation expected (line $lineno)"
 	case ${line[@]:1} in
 		V) flvert='yes';;
 		H) ;;
-		*) err "fatal: bad orientation flag: ${line[@]:1} (line $lineno)";;
+		*) err "bad orientation flag: ${line[@]:1} (line $lineno)";;
 	esac
 
 	readline || err "$eof (line $lineno)"
@@ -448,7 +448,7 @@ do
 		case ${line[@]:1} in
 			yes) flcross='yes';;
 			no) ;;
-			*) err "fatal: bad cross-stream flag: ${line[@]:1} (line $lineno)";;
+			*) err "bad cross-stream flag: ${line[@]:1} (line $lineno)";;
 		esac
 
 		readline || err "$eof (line $lineno)"
@@ -459,7 +459,7 @@ do
 
 	# Check if classes in class listing and state table header match
 	test "${clnames[*]}" != "${line[*]:1}" &&
-		err "fatal: classes and state header don't match (line $lineno)"
+		err "classes and state header don't match (line $lineno)"
 
 	# Read the first state, skipping any blank lines directly beneath the header
 	readline || err "$eof (line $lineno)"
@@ -472,18 +472,16 @@ do
 		state=()
 		for entry in ${line[@]:1}
 		do
-			# Fail on non-positive entry numbers.
 			test $entry -le 0 &&
-				err "fatal: non-positive entry number (line $lineno)"
+				err "non-positive entry number (line $lineno)"
 
-			# Make the numbers zero-based.
-			let entry--
+			let entry-- # zero-based indices
 
 			state=(${state[@]} $entry)
 		done
 
 		test "${#state[@]}" -ne "$clcount" &&
-			err "fatal: wrong entry count in state: $line (line $lineno)"
+			err "wrong entry count in state: $line (line $lineno)"
 		states[${#states[@]}]="${state[@]}"
 
 		readline -b || err "$eof (line $lineno)"
@@ -494,18 +492,18 @@ do
 	then readline || err "$eof (line $lineno)"
 	fi
 
-	# Check if the entry table header is as expected.
+	# See if entry table header has one of the expected forms
 	if test $tag = 'kerx' -a $tbfmt -eq 4
 	then
 		case "${line[*]:1}" in
 			"GoTo Mark? Advance? MatchPoints") acttype=1; vlpack=2;;
 			"GoTo Mark? Advance? MatchAnchors") acttype=2; vlpack=2;;
 			"GoTo Mark? Advance? MatchCoords") acttype=4; vlpack=4;;
-			*) err "fatal: malformed entry table header (line $lineno)";;
+			*) err "malformed entry table header (line $lineno)";;
 		esac
 	else
 		test "${line[*]:1}" != "GoTo Push? Advance? KernValues" &&
-			err "fatal: malformed entry table header (line $lineno)"
+			err "malformed entry table header (line $lineno)"
 	fi
 
 	# Read the first entry, skipping blank lines beneath the header
@@ -516,12 +514,12 @@ do
 	do
 		let entry=${#gotos[@]}+1
 		test $line -eq $entry ||
-			err "fatal: wrong number for entry listed as $entry (line $lineno)"
+			err "non-sequential entry number: $line (line $lineno)"
 
 		stname=${line[@]:1:1}
 		indexof $stname ${stnames[@]}
 		test $index -eq -1 &&
-			err "fatal: state not found: $stname (line $lineno)"
+			err "state not found: $stname (line $lineno)"
 		gotos=(${gotos[@]} $index)
 		gtnames=(${gtnames[@]} $stname)
 
@@ -558,20 +556,18 @@ do
 			for field in Marked Current
 			do
 				test "${line[1]}" != "${field}" &&
-					err "fatal: values for $field glyph expected (line $lineno)"
+					err "values for $field glyph expected (line $lineno)"
 				test $(( ${#line[@]} - 2 )) -ne $vlnreq &&
-					err "fatal: wrong number of values (line $lineno)"
+					err "wrong number of values (line $lineno)"
 
 				value=${line[@]:2}
 
 				if test $acttype -eq 1 -o $acttype -eq 2
 				then
-					# Fail on non-positive point/anchor index value.
 					test $value -le 0 &&
-						err "fatal: non-positive index value (line $lineno)"
+						err "non-positive index value (line $lineno)"
 
-					# Make the indices zero-based.
-					let value--
+					let value-- # zero-based indices
 				fi
 
 				values=(${values[@]} $value)
@@ -593,7 +589,7 @@ do
 			test $flcross != 'yes' &&
 				for value in ${line[@]}
 				do test $value = 'Reset' &&
-					err "fatal: kern reset in a non-cross-stream table (line $lineno)"
+					err "kern reset in a non-cross-stream table (line $lineno)"
 				done
 
 			values=(${values[@]} ${line[@]})
@@ -612,7 +608,7 @@ do
 		then
 			indexof $name ${vlnames[@]}
 			test $index -eq -1 &&
-				err "fatal: kern values not defined: $name (line ${actlines[$i]})"
+				err "kern values not defined: $name (line ${actlines[$i]})"
 			action=$index
 		fi
 
@@ -827,9 +823,8 @@ printf "\n</genericSFNTTable>\n"
 # Don't bother fusing if that's a dry run.
 test $dry && exit
 
-# Check if ftxdumperfuser is available.
 type ftxdumperfuser &>/dev/null ||
-	err "fatal: couldn't find the ftxdumperfuser"
+	err "could not find ftxdumperfuser"
 
 # Fuse the data files into the font.
 for data in $ankr $kerx
