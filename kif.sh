@@ -10,7 +10,7 @@ EOF
 )
 
 
-eof="premature end of file"
+# UTILITY FUNCTIONS
 
 # err message: print message to stderr and exit
 err () {
@@ -30,52 +30,8 @@ indexof () {
 	index=-1
 }
 
-tag='kerx'; ver=2 # Table version, 'kerx' by default
 
-# Parse and reset the arguments.
-args=$(getopt np:a:l $*)
-test $? -ne 0 &&
-	echo >&2 "$usage" && exit 2
-set -- $args
-
-for i
-do
-	case "$i" in
-		-n) dry='yes'; shift;;
-		-p) post=$2; shift 2;;
-		-a) ankfile=$2; shift 2;;
-		-l) tag='kern'; ver=1; shift;;
-		--) shift; break;;
-	esac
-done
-
-kif=$1; ttf=$2
-
-# Make sure we have the right set of arguments
-test -z "$kif" -o -z "$post" -a -z "$ttf" &&
-	echo >&2 "$usage" && exit 2
-
-# Prepare the paths for the kerx.xml and ankr.xml data files.
-kerx="$(dirname "$ttf")/$tag.xml"
-test $tag = 'kerx' -a "$ankfile" &&
-	ankr="$(dirname "$ttf")/ankr.xml"
-
-# Dump the 'post' table if necessary
-if test -z "$post" -a "$ttf"
-then
-	post="$(dirname $ttf)/post.xml"
-	type ftxdumperfuser &>/dev/null ||
-		err "could not find ftxdumperfuser"
-	ftxdumperfuser -t post -o $post $ttf
-fi
-
-# Find out how many lines need to be offset for a 'post' dump-based glyph lookup
-postoff=$(grep -n '\.notdef' $post | cut -d : -f 1)
-test $postoff ||
-	err ".notdef glyph missing"
-
-# Parse the 'post' table dump for an array of glyphs names.
-glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
+# READING/PARSING FUNCTIONS
 
 # readline: read next non-blank $line as list of tokens, comments excluded
 readline () {
@@ -147,6 +103,9 @@ clread () {
 	let clcount++ # target class count
 }
 
+
+# PROCESSING FUNCTIONS
+
 # bscalc: calculate bsearch header's $bsrange $bssel $bsshift
 bscalc () {
 	local usize=$1 nunits=$2
@@ -187,6 +146,9 @@ lucollapse () {
 		let i++ lusegcount++
 	done
 }
+
+
+# DATA-PRINTING FUNCTIONS
 
 # printd: print data with format, length, comment, and values as appropriate
 printd () {
@@ -237,29 +199,83 @@ pad () {
 }
 
 
-# Parse the anchor input file if given.
+# INITIAL SETUP
+
+tag='kerx'; ver=2 # Table version, 'kerx' by default
+
+# Reset and parse arguments
+args=$(getopt np:a:l $*)
+test $? -ne 0 &&
+	echo >&2 "$usage" && exit 2
+set -- $args
+
+for i
+do
+	case "$i" in
+		-n) dry='yes'; shift;;
+		-p) post=$2; shift 2;;
+		-a) ankfile=$2; shift 2;;
+		-l) tag='kern'; ver=1; shift;;
+		--) shift; break;;
+	esac
+done
+
+kif=$1; ttf=$2
+
+# Make sure we have the right set of arguments
+test -z "$kif" -o -z "$post" -a -z "$ttf" &&
+	echo >&2 "$usage" && exit 2
+
+# Set up paths for kerx.xml and ankr.xml data files
+kerx="$(dirname "$ttf")/$tag.xml"
+test $tag = 'kerx' -a "$ankfile" &&
+	ankr="$(dirname "$ttf")/ankr.xml"
+
+# Dump the 'post' table if necessary
+if test -z "$post" -a "$ttf"
+then
+	post="$(dirname $ttf)/post.xml"
+	type ftxdumperfuser &>/dev/null ||
+		err "could not find ftxdumperfuser"
+	ftxdumperfuser -t post -o $post $ttf
+fi
+
+# Find out how many lines need to be offset for a 'post' dump-based glyph lookup
+postoff=$(grep -n '\.notdef' $post | cut -d : -f 1)
+test $postoff ||
+	err ".notdef glyph missing"
+
+# Parse the 'post' dump for a list of glyphs names
+glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
+
+eof="premature end of file"
+
+
+# ANCHOR DATA PARSER/ASSEMBLER
+
 if test $ankfile
 then
 
 	{
 
-	line=() # last line read as list of tokens
-	lineno=0 # number of last line read
+	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
+	printf "<genericSFNTTable tag=\"ankr\">\n"
+
 	off=0 # current offset
+
+	printd "%04X" 2 "Table version" 0
+	printd "%04X" 2 "Flags" 0
 
 	clrefs=() # Class names as referenced (vs. as defined)
 	anchors=() # Anchor coordinates
 	ankindices=() # Indices of anchors that start each new class
 	ankoffsets=() # Calculated anchor offsets
 
+	line=() # last line read as list of tokens
+	lineno=0 # number of last line read
+
 	# Read first line
 	readline
-
-	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
-	printf "<genericSFNTTable tag=\"ankr\">\n"
-
-	printd "%04X" 2 "Table version" 0
-	printd "%04X" 2 "Flags" 0
 
 	# Read classes until anchor listing header
 	clread -u 'AnchorList'
@@ -375,17 +391,15 @@ then
 
 fi
 
+
+# MAIN KERNING FILE PARSER/ASSEMBLER
+
 {
-
-line=() # last line read as list of tokens
-lineno=0 # number of last line read
-off=0 # current offset
-
-# Read first line of input
-readline
 
 printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>\n"
 printf "<genericSFNTTable tag=\"%s\">\n" $tag
+
+off=0 # current offset
 
 printd "%04X%04X" 4 "Table version" $ver 0
 printd "%08X" 4 "No. of subtables" $(grep -c '^Type[ 	]' $kif)
@@ -396,6 +410,12 @@ let lusize=1*$ver # Size of the lookup value
 let trsize=1*$ver # Transition size
 let etsize=2+2*$ver # Full entry size in the entry table
 let vlsize=2 # Value size
+
+line=() # last line read as list of tokens
+lineno=0 # number of last line read
+
+# Read first line of input
+readline
 
 # Read the file subtable by subtable
 while test "$line" = 'Type'
@@ -820,13 +840,16 @@ printf "\n</genericSFNTTable>\n"
 
 } <$kif >$kerx
 
-# Don't bother fusing if that's a dry run.
+
+# FINAL FUSE
+
+# Don't bother fusing if it's a dry run
 test $dry && exit
 
 type ftxdumperfuser &>/dev/null ||
 	err "could not find ftxdumperfuser"
 
-# Fuse the data files into the font.
+# Fuse assembled data files into the font
 for data in $ankr $kerx
 do ftxdumperfuser -g -t $(basename -s .xml $data) -d $data $ttf
 done
