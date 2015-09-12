@@ -154,8 +154,11 @@ bscalc () {
 	while test $(( nunits >> bssel )) -gt 1
 	do let bssel++
 	done
-	bsrange=$(( usize * 2**bssel ))
-	bsshift=$(( usize * (nunits - 2**bssel) ))
+	local max=$(( 2**bssel ))
+	test $max -eq 1 &&
+		max=0 # bssel zero, no values in lookup
+	bsrange=$(( usize * max ))
+	bsshift=$(( usize * (nunits - max) ))
 }
 
 # lucollapse: filter out segments from $luarr into $lusegs
