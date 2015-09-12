@@ -137,7 +137,7 @@ clread () {
 				luend=$index
 		done
 
-		readline || err "$eof"
+		readline || return
 	done
 
 	# Set first, last glyph fallbacks to avoid iterating empty array
@@ -455,7 +455,7 @@ do
 	fi
 
 	# Read classes until state table header, the four default classes included
-	clread 'EOT' 'OOB' 'DEL' 'EOL'
+	clread 'EOT' 'OOB' 'DEL' 'EOL' || err "$eof"
 
 	# Check if classes in class listing and state table header match
 	test "${clnames[*]}" != "${line[*]:1}" &&
