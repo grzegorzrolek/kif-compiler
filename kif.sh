@@ -431,7 +431,7 @@ do
 	test $tbfmt -eq 4 -a $tag != 'kerx' &&
 		err "fatal: attachment allowed in 'kerx' table only (line $lineno)"
 
-	readline || err "$eof"
+	readline || err "$eof (line $lineno)"
 
 	test "$line" != 'Orientation' &&
 		err "fatal: kerning orientation expected (line $lineno)"
@@ -441,7 +441,7 @@ do
 		*) err "fatal: bad orientation flag: ${line[@]:1} (line $lineno)";;
 	esac
 
-	readline || err "$eof"
+	readline || err "$eof (line $lineno)"
 
 	if test "$line" = 'Cross-stream'
 	then
@@ -451,18 +451,18 @@ do
 			*) err "fatal: bad cross-stream flag: ${line[@]:1} (line $lineno)";;
 		esac
 
-		readline || err "$eof"
+		readline || err "$eof (line $lineno)"
 	fi
 
 	# Read classes until state table header, the four default classes included
-	clread 'EOT' 'OOB' 'DEL' 'EOL' || err "$eof"
+	clread 'EOT' 'OOB' 'DEL' 'EOL' || err "$eof (line $lineno)"
 
 	# Check if classes in class listing and state table header match
 	test "${clnames[*]}" != "${line[*]:1}" &&
 		err "fatal: classes and state header don't match (line $lineno)"
 
 	# Read the first state, skipping any blank lines directly beneath the header
-	readline || err "$eof"
+	readline || err "$eof (line $lineno)"
 
 	# Read the state table until either a blank line or an indented one
 	until test -z "${line[*]}" -o -z "$line"
@@ -486,12 +486,12 @@ do
 			err "fatal: wrong entry count in state: $line (line $lineno)"
 		states[${#states[@]}]="${state[@]}"
 
-		readline -b || err "$eof"
+		readline -b || err "$eof (line $lineno)"
 	done
 
 	# Skip additional blank lines if necessary
 	if test -z "${line[*]}"
-	then readline || err "$eof"
+	then readline || err "$eof (line $lineno)"
 	fi
 
 	# Check if the entry table header is as expected.
@@ -509,7 +509,7 @@ do
 	fi
 
 	# Read the first entry, skipping blank lines beneath the header
-	readline || err "$eof"
+	readline || err "$eof (line $lineno)"
 
 	# Read entries until a blank line, or an indented one (the Font Tools way)
 	until test -z "${line[*]}" -o -z "$line"
@@ -530,11 +530,11 @@ do
 		actnames=(${actnames[@]} ${line[@]:4:1})
 		actlines=(${actlines[@]} $lineno)
 
-		readline -b || err "$eof"
+		readline -b || err "$eof (line $lineno)"
 	done
 
 	if test -z "${line[*]}"
-	then readline || err "$eof"
+	then readline || err "$eof (line $lineno)"
 	fi
 
 	# Read values until either next subtable header or end of file
@@ -577,7 +577,7 @@ do
 				values=(${values[@]} $value)
 
 				readline || if test $field = 'Marked'
-					then err "$eof"
+					then err "$eof (line $lineno)"
 					else break
 					fi
 			done
