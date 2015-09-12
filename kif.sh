@@ -265,10 +265,10 @@ then
 	clread -u 'AnchorList'
 
 	# Read the first class reference
-	readline || err "$eof"
+	readline
 
 	# Prevent the class reference from being mistakenly indented
-	test -z "$line" &&
+	test $? -eq 0 -a -z "$line" &&
 		err "fatal: class reference expected (line $lineno)"
 
 	# Read anchor data until end of file
