@@ -120,7 +120,7 @@ clread () {
 	do
 		if test "$line" != '+'
 		then
-			clcount=${#clnames[@]}
+			clcount=${#clnames[@]} # temporarily current class index
 			clnames=(${clnames[@]} $line)
 		fi
 
@@ -140,8 +140,11 @@ clread () {
 		readline || err "$eof"
 	done
 
-	# Update the number of classes.
-	let clcount++
+	# Set first, last glyph fallbacks to avoid iterating empty array
+	lustart=${lustart-0}
+	luend=${luend--1}
+
+	let clcount++ # target class count
 }
 
 # bscalc: calculate bsearch header's $bsrange $bssel $bsshift
@@ -696,10 +699,11 @@ do
 		printd "%04X" 2 "First glyph" $lustart
 		printd "%04X" 2 "Glyph count" $lumapcount
 
-		for i in $(seq $lustart $luend)
+		let i=$lustart; while test $i -le $luend
 		do
 			class=${luarr[$i]-1}
 			printd "%02X" $lumapsize "${glnames[$i]}: ${clnames[$class]}" $class
+			let i++
 		done
 	fi
 
