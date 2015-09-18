@@ -147,12 +147,13 @@ Troubleshooting
 ---------------
 
 Both your input files are translated into data files full of hex code
-for your `kerx` and `ankr` tables that are then fused into the font.
-These intermediate data files are nicely formatted and commented, what
-can be of much help in case something goes wrong in the process. To
+for your `kerx` and `ankr` tables that are then fused into the font. If
+you run the compiler with a `-d` flag, these intermediate data files
+will include comments and references to your input file, what can be of
+much help in case something goes wrong in the process. Moreover, to
 produce the files without actually fusing them in, use an `-n` option:
 
-    ./kif.sh -n -a anchors.kif kerning.kif font.ttf
+    ./kif.sh -d -n -a anchors.kif kerning.kif font.ttf
 
 Data files named `kerx.xml` and `ankr.xml` are created next to your font
 file. You can look into them, or fuse into the font yourself with a

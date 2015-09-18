@@ -5,7 +5,7 @@
 
 
 usage=$(cat <<EOF
-usage: $(basename $0) [-l] [-n] [-p post.xml] [-a anchors.kif] kerning.kif font.ttf
+usage: $(basename $0) [-d] [-l] [-n] [-p post.xml] [-a anchors.kif] kerning.kif font.ttf
 EOF
 )
 
@@ -154,6 +154,9 @@ lucollapse () {
 printd () {
 	local form=$1 len=$2 comm=$3; shift 3
 
+	test ! $debug &&
+		unset comm
+
 	test -n "$comm" &&
 		comm=" <!-- $comm -->"
 
@@ -184,7 +187,8 @@ luprint () {
 	for i in ${!lusegs[@]}
 	do
 		local s=(${lusegs[$i]})
-		local names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
+		test $debug &&
+			local names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
 		printd "%04X %04X %04X" $lumapsize "$names" ${s[@]:0:2} ${arr[$i]-${s[2]}}
 	done
 	printd "%04X %04X %04X" $lumapsize "Guardian value" $(( 16#FFFF )) $(( 16#FFFF ))
@@ -204,7 +208,7 @@ pad () {
 tag='kerx'; ver=2 # Table version, 'kerx' by default
 
 # Reset and parse arguments
-args=$(getopt np:a:l $*)
+args=$(getopt np:a:ld $*)
 test $? -ne 0 &&
 	echo >&2 "$usage" && exit 2
 set -- $args
@@ -216,6 +220,7 @@ do
 		-p) post=$2; shift 2;;
 		-a) ankfile=$2; shift 2;;
 		-l) tag='kern'; ver=1; shift;;
+		-d) debug='yes'; shift;;
 		--) shift; break;;
 	esac
 done
@@ -245,8 +250,9 @@ postoff=$(grep -n '\.notdef' $post | cut -d : -f 1)
 test $postoff ||
 	err ".notdef glyph missing"
 
-# Parse the 'post' dump for a list of glyphs names
-glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
+# Parse the 'post' dump for a list of glyphs names for debugging
+test $debug &&
+	glnames=($(sed -n 's/<PostScriptName ..* NameString=\"\(..*\)\".*>/\1/p' <$post))
 
 eof="premature end of file"
 
@@ -682,8 +688,11 @@ do
 	let tblen=$tbhead+$vloff+$vllen+$vlpad # Subtable length
 
 	printf "\n"
-	printf "\t<!-- Subtable No. %d -->\n" $(( ++tbno ))
-	printf "\n"
+	if test $debug
+	then
+		printf "\t<!-- Subtable No. %d -->\n" $(( ++tbno ))
+		printf "\n"
+	fi
 
 	flags=0
 	test $flvert = 'yes' && let flags+=16#80
@@ -721,19 +730,25 @@ do
 		let i=$lustart; while test $i -le $luend
 		do
 			class=${luarr[$i]-1}
-			printd "%02X" $lumapsize "${glnames[$i]}: ${clnames[$class]}" $class
+			test $debug &&
+				names="${glnames[$i]}: ${clnames[$class]}"
+			printd "%02X" $lumapsize "$names" $class
 			let i++
 		done
 	fi
 
 	pad $lupad
 
-	# Print at least stubs of class names along the transitions.
-	printf "\n\t                            <!-- "
-	for name in ${clnames[@]}
-	do printf "%-*.*s " $(( 2*ver )) $(( 2*ver )) $name
-	done
-	printf " -->\n"
+	printf "\n"
+	if test $debug
+	then
+		# Print at least stubs of class names along the transitions
+		printf "\t                            <!-- "
+		for name in ${clnames[@]}
+		do printf "%-*.*s " $(( 2*ver )) $(( 2*ver )) $name
+		done
+		printf " -->\n"
+	fi
 
 	for i in ${!states[@]}
 	do
@@ -758,7 +773,8 @@ do
 		test ${flpush[$i]} = 'yes' && let flags+=16#8000
 		test ${fladvance[$i]} = 'yes' || let flags+=16#4000
 
-		comment="$(printf "%02X" $i) ${gtnames[$i]}"
+		test $debug &&
+			comment="$(printf "%02X" $i) ${gtnames[$i]}"
 
 		if test $tag = 'kerx'
 		then
@@ -836,7 +852,7 @@ do
 
 done
 
-printf "\n</genericSFNTTable>\n"
+printf "</genericSFNTTable>\n"
 
 } <$kif >$kerx
 
