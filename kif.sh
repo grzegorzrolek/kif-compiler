@@ -77,7 +77,7 @@ clread () {
 		if test "$line" != '+'
 		then
 			clcount=${#clnames[@]} # temporarily current class index
-			clnames=(${clnames[@]} $line)
+			clnames+=($line)
 		fi
 
 		for glyph in ${line[@]:1}
@@ -142,7 +142,7 @@ lucollapse () {
 		done
 
 		local segment=($i $first $value)
-		lusegs[$lusegcount]=${segment[@]}
+		lusegs+=("${segment[*]}")
 		let i++ lusegcount++
 	done
 }
@@ -302,8 +302,8 @@ then
 		indexof $line ${clrefs[@]}
 		test $index -ne -1 &&
 			err "class referenced twice: $line (line $lineno)"
-		clrefs[${#clrefs[@]}]=$line
-		ankindices=(${ankindices[@]} $loc)
+		clrefs+=($line)
+		ankindices+=($loc)
 
 		readline || break
 
@@ -312,7 +312,7 @@ then
 		do
 			test $(( ( ${#line[@]} - 1 ) % 2 )) -ne 0 &&
 				err "non-even number of coordinates (line $lineno)"
-			anchors=(${anchors[@]} ${line[@]})
+			anchors+=(${line[@]})
 
 			let loc++
 
@@ -362,7 +362,7 @@ then
 	do
 		s=(${lusegs[$i]})
 		let ankoffset=${ankindices[${s[2]}]}*4+${s[2]}*4
-		ankoffsets[$i]=$ankoffset
+		ankoffsets+=($ankoffset)
 	done
 
 	# Print the lookup array, but with offsets instead of indices.
@@ -493,7 +493,7 @@ do
 	# Read the state table until either a blank line or an indented one
 	until test -z "${line[*]}" -o -z "$line"
 	do
-		stnames=(${stnames[@]} $line)
+		stnames+=($line)
 
 		state=()
 		for entry in ${line[@]:1}
@@ -503,12 +503,12 @@ do
 
 			let entry-- # zero-based indices
 
-			state=(${state[@]} $entry)
+			state+=($entry)
 		done
 
 		test "${#state[@]}" -ne "$clcount" &&
 			err "wrong entry count in state: $line (line $lineno)"
-		states[${#states[@]}]="${state[@]}"
+		states+=("${state[*]}")
 
 		readline -b || err "$eof (line $lineno)"
 	done
@@ -546,13 +546,13 @@ do
 		indexof $stname ${stnames[@]}
 		test $index -eq -1 &&
 			err "state not found: $stname (line $lineno)"
-		gotos=(${gotos[@]} $index)
-		gtnames=(${gtnames[@]} $stname)
+		gotos+=($index)
+		gtnames+=($stname)
 
-		flpush=(${flpush[@]} ${line[@]:2:1})
-		fladvance=(${fladvance[@]} ${line[@]:3:1})
-		actnames=(${actnames[@]} ${line[@]:4:1})
-		actlines=(${actlines[@]} $lineno)
+		flpush+=(${line[@]:2:1})
+		fladvance+=(${line[@]:3:1})
+		actnames+=(${line[@]:4:1})
+		actlines+=($lineno)
 
 		readline -b || err "$eof (line $lineno)"
 	done
@@ -564,8 +564,8 @@ do
 	# Read values until either next subtable header or end of file
 	until test "$line" = 'Type'
 	do
-		vlnames=(${vlnames[@]} ${line:-${line[1]}}) # in case of indent on first name
-		vlindices=(${vlindices[@]} ${#values[@]})
+		vlnames+=(${line:-${line[1]}}) # in case of indent on first name
+		vlindices+=(${#values[@]})
 
 		readline || break
 
@@ -596,7 +596,7 @@ do
 					let value-- # zero-based indices
 				fi
 
-				values=(${values[@]} $value)
+				values+=($value)
 
 				readline || if test $field = 'Marked'
 					then err "$eof (line $lineno)"
@@ -618,7 +618,7 @@ do
 					err "kern reset in a non-cross-stream table (line $lineno)"
 				done
 
-			values=(${values[@]} ${line[@]})
+			values+=(${line[@]})
 
 			readline || break 2
 		done
@@ -638,7 +638,7 @@ do
 			action=$index
 		fi
 
-		actions[$i]=$action
+		actions+=($action)
 	done
 
 	# Pre-compute the end-of-list marker count prior to each action.
@@ -652,7 +652,7 @@ do
 			test $curr -gt $prev &&
 				let nmarks++
 
-			eolmarks[$i]=$nmarks
+			eolmarks+=($nmarks)
 			prev=$curr
 		done
 
