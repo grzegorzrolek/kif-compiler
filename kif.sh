@@ -85,7 +85,7 @@ clread () {
 			index=$(grep -n "\"$glyph\"" $post | cut -d : -f 1)
 			test $index ||
 				err "glyph not found: $glyph (line $lineno)"
-			let index-=$postoff
+			let index-=postoff
 			luarr[index]=$clcount
 			test $index -lt ${lustart=$index} &&
 				lustart=$index
@@ -164,7 +164,7 @@ printd () {
 	printf "$form" "$@"
 	printf "\"/>$comm\n"
 
-	let off+=$len
+	let off+=len
 }
 
 # luprint array: print lookups from either $lusegs or array
@@ -347,11 +347,11 @@ then
 	luoff=12 # lookup table offset
 	luhead=12 # binsearch lookup header size
 	lusize=2 # lookup value size
-	let lumapsize=2*2+$lusize # Mapping size
-	let lumapcount=$lusegcount+1 # Number of mappings
-	let lulen=$luhead+$lumapcount*$lumapsize # Lookup table length
-	let lupad=$lulen/2%2*2 # Padding
-	let ankoff=$luoff+$lulen+$lupad # Anchor table offset
+	let lumapsize=4+lusize # single mapping size
+	let lumapcount=lusegcount+1
+	let lulen=luhead+lumapcount*lumapsize
+	let lupad=lulen/2%2*2
+	let ankoff=luoff+lulen+lupad
 
 	printd "%08X" 4 "Anchor lookup offset" $luoff
 	printd "%08X" 4 "Anchors offset" $ankoff
@@ -380,9 +380,10 @@ then
 			xval=${anchors[v++]}
 			yval=${anchors[v++]}
 
-			# Make a 2's complement for a negative value.
-			test $xval -lt 0 && let xval=16#10000+$xval
-			test $yval -lt 0 && let yval=16#10000+$yval
+			test $xval -lt 0 &&
+				let xval+=16#10000 # 2's complement of sorts
+			test $yval -lt 0 &&
+				let yval+=16#10000
 
 			printd "%04X %04X" 4 "" $xval $yval
 		done
@@ -407,11 +408,11 @@ off=0 # current offset
 printd "%04X%04X" 4 "Table version" $ver 0
 printd "%08X" 4 "No. of subtables" $(grep -c '^Type[ 	]' $kif)
 
-let tbhead=4+2*2*$ver # Subtable header size
-let luoff=5*2*$ver # Lookup table offset (length of a state table header)
+let tbhead=4+2*2*ver # subtable header size
+let luoff=5*2*ver # lookup table offset (length of state table header)
 lusize=$ver # lookup value size
 trsize=$ver # transition entry size
-let etsize=2+2*$ver # Full entry size in the entry table
+let etsize=2+2*ver # full entry size
 vlsize=2 # value size
 
 line=() # last line read as list of tokens
@@ -651,7 +652,7 @@ do
 			prev=$curr
 		done
 
-		let eolmarkcount=$nmarks+1
+		let eolmarkcount=nmarks+1
 	fi
 
 	if test $tag = 'kerx'
@@ -660,27 +661,27 @@ do
 		lucollapse
 
 		luhead=12 # segmented lookup table header size
-		let lumapsize=2*2+$lusize # Mapping size
-		let lumapcount=$lusegcount+1 # Number of mappings
+		let lumapsize=4+lusize
+		let lumapcount=lusegcount+1
 	else
 		luhead=4 # trimmed lookup array header size
 		lumapsize=$lusize
-		let lumapcount=$luend-$lustart+1 # Number of mappings
+		let lumapcount=luend-lustart+1
 	fi
 
-	let lulen=$luhead+$lumapcount*$lumapsize # Class lookup table length
-	let lupad=$lulen/$ver%2*$ver
-	let stoff=$luoff+$lulen+$lupad # State table offset
-	let stlen=${#states[@]}*$clcount*$trsize # State table length
-	let stpad=$stlen/$ver%2*$ver
-	let etoff=$stoff+$stlen+$stpad # Entry table offset
-	let etlen=${#gotos[@]}*$etsize # Entry table length
-	let etpad=$etlen/$ver%2*$ver
-	let vloff=$etoff+$etlen+$etpad # Kern values offset
-	let vllen=${#values[@]}*$vlsize # Values length
-	let vllen+=$eolmarkcount*$vlsize # the end-of-list markers, if any
-	let vlpad=$vllen/$ver%2*$ver
-	let tblen=$tbhead+$vloff+$vllen+$vlpad # Subtable length
+	let lulen=luhead+lumapcount*lumapsize
+	let lupad=lulen/ver%2*ver
+	let stoff=luoff+lulen+lupad
+	let stlen=${#states[@]}*clcount*trsize
+	let stpad=stlen/ver%2*ver
+	let etoff=stoff+stlen+stpad
+	let etlen=${#gotos[@]}*etsize
+	let etpad=etlen/ver%2*ver
+	let vloff=etoff+etlen+etpad
+	let vllen=${#values[@]}*vlsize
+	let vllen+=eolmarkcount*vlsize # end-of-list markers, if any
+	let vlpad=vllen/ver%2*ver
+	let tblen=tbhead+vloff+vllen+vlpad
 
 	printf "\n"
 	if test $debug
@@ -778,9 +779,9 @@ do
 				vlindex=${vlindices[action]}
 				if test $tbfmt -eq 4
 				then
-					let vlindex/=$vlpack
+					let vlindex/=vlpack
 				else
-					let vlindex+=${eolmarks[action]}
+					let vlindex+=eolmarks[action]
 				fi
 			else
 				let vlindex=16#FFFF
@@ -788,11 +789,10 @@ do
 
 			printd "%04X %04X %04X" $etsize "$comment" $goto $flags $vlindex
 		else
-			# Use byte offsets for the old table.
-			let goto=$stoff+$goto*$clcount
+			let goto=stoff+goto*clcount # byte-offset
 
 			test $action -ge 0 &&
-				let flags+=$vloff+${vlindices[action]}*$vlsize
+				let flags+=vloff+vlindices[action]*vlsize
 
 			printd "%04X %04X" $etsize "$comment" $goto $flags
 		fi
@@ -804,10 +804,10 @@ do
 	v=0; for i in ${!vlindices[@]}
 	do
 		nextval=${vlindices[i+1]=${#values[@]}}
-		let count=$nextval-${vlindices[i]}
-		let len=$count*$vlsize
+		let count=nextval-vlindices[i]
+		let len=count*vlsize
 		test $tag = 'kerx' -a $tbfmt -eq 1 &&
-			let len+=$vlsize # end-of-list value
+			let len+=vlsize # end-of-list value
 
 		printd "%04X " $len "${vlnames[i]}" $(
 
@@ -819,12 +819,12 @@ do
 					let value=16#8000 # cross-stream reset flag
 
 				test $value -lt 0 &&
-					let value=16#10000+$value # 2\'s complement
+					let value+=16#10000 # 2\'s complement of sorts
 
 				if test $tag != 'kerx'
 				then
 					# Clear the least significant bit
-					let value-=$value%2
+					let value-=value%2
 
 					test $(( w + 1 )) -eq $nextval &&
 						let value+=1 # end-of-list flag
@@ -840,7 +840,7 @@ do
 
 			)
 
-		let v+=$count
+		let v+=count
 	done
 
 	pad $vlpad
