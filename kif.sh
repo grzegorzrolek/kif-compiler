@@ -86,7 +86,7 @@ clread () {
 			test $index ||
 				err "glyph not found: $glyph (line $lineno)"
 			let index-=$postoff
-			luarr[$index]=$clcount
+			luarr[index]=$clcount
 			test $index -lt ${lustart=$index} &&
 				lustart=$index
 			test $index -gt ${luend=$index} &&
@@ -126,18 +126,18 @@ lucollapse () {
 	lusegcount=0
 	local i=$lustart; while test $i -le $luend
 	do
-		unset value; local value=${luarr[$i]}
+		unset value; local value=${luarr[i]}
 
-		# Skip holes in the array.
+		# Skip slots with no value set
 		if test -z "$value"
 		then let i++; continue
 		fi
 
 		local first=$i
 
-		# Skip to the last subsequent slot with same value.
-		while test -n "${luarr[$((i+1))]}" &&
-			test ${luarr[$((i+1))]} -eq $value
+		# Skip each subsequent slot with same value
+		while test -n "${luarr[i+1]}" &&
+			test ${luarr[i+1]} -eq $value
 		do let i++
 		done
 
@@ -186,10 +186,10 @@ luprint () {
 
 	for i in ${!lusegs[@]}
 	do
-		local s=(${lusegs[$i]})
+		local s=(${lusegs[i]})
 		test $debug &&
-			local names="${glnames[${s[0]}]} - ${glnames[${s[1]}]}: ${clnames[${s[2]}]}"
-		printd "%04X %04X %04X" $lumapsize "$names" ${s[@]:0:2} ${arr[$i]-${s[2]}}
+			local names="${glnames[s[0]]} - ${glnames[s[1]]}: ${clnames[s[2]]}"
+		printd "%04X %04X %04X" $lumapsize "$names" ${s[@]:0:2} ${arr[i]-${s[2]}}
 	done
 	printd "%04X %04X %04X" $lumapsize "Guardian value" $(( 16#FFFF )) $(( 16#FFFF ))
 }
@@ -323,19 +323,19 @@ then
 	# Resolve classes as defined into classes as referenced.
 	let i=$lustart; while test $i -le $luend
 	do
-		# Skip null values or they'll default to zero.
-		if test -z "${luarr[$i]}"
+		# Skip unset slots or they'll default to value zero
+		if test -z "${luarr[i]}"
 		then let i++; continue
 		fi
 
-		name=${clnames[${luarr[$i]}]}
+		name=${clnames[luarr[i]]}
 		indexof $name ${clrefs[@]}
 
 		# Remove unused classes from lookup array, if any.
 		test $index -eq -1 &&
 			index=""
 
-		luarr[$i]=$index
+		luarr[i]=$index
 		let i++
 	done
 
@@ -360,8 +360,8 @@ then
 	# Translate anchor indices to offsets.
 	for i in ${!lusegs[@]}
 	do
-		s=(${lusegs[$i]})
-		let ankoffset=${ankindices[${s[2]}]}*4+${s[2]}*4
+		s=(${lusegs[i]})
+		let ankoffset=${ankindices[s[2]]}*4+${s[2]}*4
 		ankoffsets+=($ankoffset)
 	done
 
@@ -374,13 +374,13 @@ then
 	printf "\n"
 	let v=0; for i in ${!ankindices[@]}
 	do
-		nextank=${ankindices[$(( i + 1 ))]=$nanchors}
-		printd "%08X" 4 "${clnames[$i]}" $(( nextank - v/2 ))
+		nextank=${ankindices[i+1]=$nanchors}
+		printd "%08X" 4 "${clnames[i]}" $(( nextank - v/2 ))
 
 		while test $(( v / 2 )) -lt $nextank
 		do
-			xval=${anchors[$v]}
-			yval=${anchors[$(( v + 1 ))]}
+			xval=${anchors[v]}
+			yval=${anchors[v+1]}
 			let v+=2
 
 			# Make a 2's complement for a negative value.
@@ -627,14 +627,14 @@ do
 	# Now with the values parsed match their indices to actions.
 	for i in ${!actnames[@]}
 	do
-		name=${actnames[$i]}
+		name=${actnames[i]}
 		action=-1
 
 		if test $name != 'none'
 		then
 			indexof $name ${vlnames[@]}
 			test $index -eq -1 &&
-				err "kern values not defined: $name (line ${actlines[$i]})"
+				err "kern values not defined: $name (line ${actlines[i]})"
 			action=$index
 		fi
 
@@ -646,7 +646,7 @@ do
 	then
 		let prev=0 nmarks=0; for i in ${!vlindices[@]}
 		do
-			curr=${vlindices[$i]}
+			curr=${vlindices[i]}
 
 			# Increase the count for non-empty actions only.
 			test $curr -gt $prev &&
@@ -729,9 +729,9 @@ do
 
 		let i=$lustart; while test $i -le $luend
 		do
-			class=${luarr[$i]-1}
+			class=${luarr[i]-1}
 			test $debug &&
-				names="${glnames[$i]}: ${clnames[$class]}"
+				names="${glnames[i]}: ${clnames[class]}"
 			printd "%02X" $lumapsize "$names" $class
 			let i++
 		done
@@ -752,9 +752,9 @@ do
 
 	for i in ${!states[@]}
 	do
-		printd "%0*X " $(( trsize * clcount )) "${stnames[$i]}" $(
+		printd "%0*X " $(( trsize * clcount )) "${stnames[i]}" $(
 
-			for trans in ${states[$i]}
+			for trans in ${states[i]}
 			do echo $(( trsize * 2 )) $trans
 			done
 
@@ -766,26 +766,26 @@ do
 	printf "\n"
 	for i in ${!gotos[@]}
 	do
-		goto=${gotos[$i]}
-		action=${actions[$i]}
+		goto=${gotos[i]}
+		action=${actions[i]}
 
 		flags=0
-		test ${flpush[$i]} = 'yes' && let flags+=16#8000
-		test ${fladvance[$i]} = 'yes' || let flags+=16#4000
+		test ${flpush[i]} = 'yes' && let flags+=16#8000
+		test ${fladvance[i]} = 'yes' || let flags+=16#4000
 
 		test $debug &&
-			comment="$(printf "%02X" $i) ${gtnames[$i]}"
+			comment="$(printf "%02X" $i) ${gtnames[i]}"
 
 		if test $tag = 'kerx'
 		then
 			if test $action -ge 0
 			then
-				let vlindex=${vlindices[$action]}
+				let vlindex=${vlindices[action]}
 				if test $tbfmt -eq 4
 				then
 					let vlindex/=$vlpack
 				else
-					let vlindex+=${eolmarks[$action]}
+					let vlindex+=${eolmarks[action]}
 				fi
 			else
 				let vlindex=16#FFFF
@@ -797,7 +797,7 @@ do
 			let goto=$stoff+$goto*$clcount
 
 			test $action -ge 0 &&
-				let flags+=$vloff+${vlindices[$action]}*$vlsize
+				let flags+=$vloff+${vlindices[action]}*$vlsize
 
 			printd "%04X %04X" $etsize "$comment" $goto $flags
 		fi
@@ -808,17 +808,17 @@ do
 	printf "\n"
 	let v=0; for i in ${!vlindices[@]}
 	do
-		nextval=${vlindices[(( i+1 ))]=${#values[@]}}
-		let count=$nextval-${vlindices[$i]}
+		nextval=${vlindices[i+1]=${#values[@]}}
+		let count=$nextval-${vlindices[i]}
 		let len=$count*$vlsize
 		test $tag = 'kerx' -a $tbfmt -eq 1 &&
 			let len+=$vlsize # end-of-list value
 
-		printd "%04X " $len "${vlnames[$i]}" $(
+		printd "%04X " $len "${vlnames[i]}" $(
 
 			let w=$v; while test $w -lt $nextval
 			do
-				value=${values[$w]}
+				value=${values[w]}
 
 				test $value = 'Reset' &&
 					let value=16#8000 # cross-stream reset flag
