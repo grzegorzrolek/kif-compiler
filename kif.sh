@@ -294,7 +294,7 @@ then
 		err "class reference expected (line $lineno)"
 
 	# Read anchor data until end of file
-	let loc=0; while test "$line"
+	loc=0; while test "$line"
 	do
 		indexof $line ${clnames[@]}
 		test $index -eq -1 &&
@@ -320,8 +320,8 @@ then
 		done
 	done
 
-	# Resolve classes as defined into classes as referenced.
-	let i=$lustart; while test $i -le $luend
+	# Resolve class indices as defined into order of their reference
+	i=$lustart; while test $i -le $luend
 	do
 		# Skip unset slots or they'll default to value zero
 		if test -z "${luarr[i]}"
@@ -335,8 +335,7 @@ then
 		test $index -eq -1 &&
 			index=""
 
-		luarr[i]=$index
-		let i++
+		luarr[i++]=$index
 	done
 
 	# Use only the referenced class names from now on.
@@ -345,9 +344,9 @@ then
 	# Filter out ranges of glyphs with same class from the lookup array
 	lucollapse
 
-	let luoff=12 # Lookup table offset, constant
-	let luhead=6*2 # Size of a bsearch lookup table header
-	let lusize=2 # Size of the anchor offset lookup entry
+	luoff=12 # lookup table offset
+	luhead=12 # binsearch lookup header size
+	lusize=2 # lookup value size
 	let lumapsize=2*2+$lusize # Mapping size
 	let lumapcount=$lusegcount+1 # Number of mappings
 	let lulen=$luhead+$lumapcount*$lumapsize # Lookup table length
@@ -361,8 +360,7 @@ then
 	for i in ${!lusegs[@]}
 	do
 		s=(${lusegs[i]})
-		let ankoffset=${ankindices[s[2]]}*4+${s[2]}*4
-		ankoffsets+=($ankoffset)
+		ankoffsets+=($(( ankindices[s[2]] * 4 + s[2] * 4 )))
 	done
 
 	# Print the lookup array, but with offsets instead of indices.
@@ -372,16 +370,15 @@ then
 
 	let nanchors=${#anchors[@]}/2 # No. of all the anchors
 	printf "\n"
-	let v=0; for i in ${!ankindices[@]}
+	v=0; for i in ${!ankindices[@]}
 	do
 		nextank=${ankindices[i+1]=$nanchors}
 		printd "%08X" 4 "${clnames[i]}" $(( nextank - v/2 ))
 
 		while test $(( v / 2 )) -lt $nextank
 		do
-			xval=${anchors[v]}
-			yval=${anchors[v+1]}
-			let v+=2
+			xval=${anchors[v++]}
+			yval=${anchors[v++]}
 
 			# Make a 2's complement for a negative value.
 			test $xval -lt 0 && let xval=16#10000+$xval
@@ -412,10 +409,10 @@ printd "%08X" 4 "No. of subtables" $(grep -c '^Type[ 	]' $kif)
 
 let tbhead=4+2*2*$ver # Subtable header size
 let luoff=5*2*$ver # Lookup table offset (length of a state table header)
-let lusize=1*$ver # Size of the lookup value
-let trsize=1*$ver # Transition size
+lusize=$ver # lookup value size
+trsize=$ver # transition entry size
 let etsize=2+2*$ver # Full entry size in the entry table
-let vlsize=2 # Value size
+vlsize=2 # value size
 
 line=() # last line read as list of tokens
 lineno=0 # number of last line read
@@ -501,9 +498,7 @@ do
 			test $entry -le 0 &&
 				err "non-positive entry number (line $lineno)"
 
-			let entry-- # zero-based indices
-
-			state+=($entry)
+			state+=($(( --entry ))) # zero-based indices
 		done
 
 		test "${#state[@]}" -ne "$clcount" &&
@@ -644,7 +639,7 @@ do
 	# Pre-compute the end-of-list marker count prior to each action.
 	if test $tag = 'kerx' -a $tbfmt -eq 1
 	then
-		let prev=0 nmarks=0; for i in ${!vlindices[@]}
+		prev=0; nmarks=0; for i in ${!vlindices[@]}
 		do
 			curr=${vlindices[i]}
 
@@ -664,12 +659,12 @@ do
 		# Filter out glyph ranges of same class
 		lucollapse
 
-		let luhead=6*2 # Size of a segmented lookup table header
+		luhead=12 # segmented lookup table header size
 		let lumapsize=2*2+$lusize # Mapping size
 		let lumapcount=$lusegcount+1 # Number of mappings
 	else
-		let luhead=2*2 # Size of a trimmed lookup array header
-		let lumapsize=$lusize # Mapping size
+		luhead=4 # trimmed lookup array header size
+		lumapsize=$lusize
 		let lumapcount=$luend-$lustart+1 # Number of mappings
 	fi
 
@@ -727,7 +722,7 @@ do
 		printd "%04X" 2 "First glyph" $lustart
 		printd "%04X" 2 "Glyph count" $lumapcount
 
-		let i=$lustart; while test $i -le $luend
+		i=$lustart; while test $i -le $luend
 		do
 			class=${luarr[i]-1}
 			test $debug &&
@@ -780,7 +775,7 @@ do
 		then
 			if test $action -ge 0
 			then
-				let vlindex=${vlindices[action]}
+				vlindex=${vlindices[action]}
 				if test $tbfmt -eq 4
 				then
 					let vlindex/=$vlpack
@@ -806,7 +801,7 @@ do
 	pad $etpad
 
 	printf "\n"
-	let v=0; for i in ${!vlindices[@]}
+	v=0; for i in ${!vlindices[@]}
 	do
 		nextval=${vlindices[i+1]=${#values[@]}}
 		let count=$nextval-${vlindices[i]}
@@ -816,7 +811,7 @@ do
 
 		printd "%04X " $len "${vlnames[i]}" $(
 
-			let w=$v; while test $w -lt $nextval
+			w=$v; while test $w -lt $nextval
 			do
 				value=${values[w]}
 
