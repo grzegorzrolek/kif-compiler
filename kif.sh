@@ -347,11 +347,11 @@ then
 	luoff=12 # lookup table offset
 	luhead=12 # binsearch lookup header size
 	lusize=2 # lookup value size
-	let lumapsize=4+lusize # single mapping size
-	let lumapcount=lusegcount+1
-	let lulen=luhead+lumapcount*lumapsize
-	let lupad=lulen/2%2*2
-	let ankoff=luoff+lulen+lupad
+	lumapsize=$(( 4 + lusize )) # single mapping size
+	lumapcount=$(( lusegcount + 1 ))
+	lulen=$(( luhead + lumapcount * lumapsize ))
+	lupad=$(( lulen / 2 % 2 * 2 ))
+	ankoff=$(( luoff + lulen + lupad ))
 
 	printd "%08X" 4 "Anchor lookup offset" $luoff
 	printd "%08X" 4 "Anchors offset" $ankoff
@@ -368,7 +368,7 @@ then
 
 	pad $lupad
 
-	let nanchors=${#anchors[@]}/2 # No. of all the anchors
+	nanchors=$(( ${#anchors[@]} / 2 ))
 	printf "\n"
 	v=0; for i in ${!ankindices[@]}
 	do
@@ -408,11 +408,11 @@ off=0 # current offset
 printd "%04X%04X" 4 "Table version" $ver 0
 printd "%08X" 4 "No. of subtables" $(grep -c '^Type[ 	]' $kif)
 
-let tbhead=4+2*2*ver # subtable header size
-let luoff=5*2*ver # lookup table offset (length of state table header)
+tbhead=$(( 4 + 2 * 2*ver )) # subtable header size
+luoff=$(( 5 * 2*ver )) # lookup table offset (length of state table header)
 lusize=$ver # lookup value size
 trsize=$ver # transition entry size
-let etsize=2+2*ver # full entry size
+etsize=$(( 2 + 2*ver )) # full entry size
 vlsize=2 # value size
 
 line=() # last line read as list of tokens
@@ -534,7 +534,7 @@ do
 	# Read entries until a blank line, or an indented one (the Font Tools way)
 	until test -z "${line[*]}" -o -z "$line"
 	do
-		let entry=${#gotos[@]}+1
+		entry=$(( ${#gotos[@]} + 1 ))
 		test $line -eq $entry ||
 			err "non-sequential entry number: $line (line $lineno)"
 
@@ -652,7 +652,7 @@ do
 			prev=$curr
 		done
 
-		let eolmarkcount=nmarks+1
+		eolmarkcount=$(( nmarks + 1 ))
 	fi
 
 	if test $tag = 'kerx'
@@ -661,27 +661,27 @@ do
 		lucollapse
 
 		luhead=12 # segmented lookup table header size
-		let lumapsize=4+lusize
-		let lumapcount=lusegcount+1
+		lumapsize=$(( 4 + lusize ))
+		lumapcount=$(( lusegcount + 1 ))
 	else
 		luhead=4 # trimmed lookup array header size
 		lumapsize=$lusize
-		let lumapcount=luend-lustart+1
+		lumapcount=$(( luend - lustart + 1 ))
 	fi
 
-	let lulen=luhead+lumapcount*lumapsize
-	let lupad=lulen/ver%2*ver
-	let stoff=luoff+lulen+lupad
-	let stlen=${#states[@]}*clcount*trsize
-	let stpad=stlen/ver%2*ver
-	let etoff=stoff+stlen+stpad
-	let etlen=${#gotos[@]}*etsize
-	let etpad=etlen/ver%2*ver
-	let vloff=etoff+etlen+etpad
-	let vllen=${#values[@]}*vlsize
-	let vllen+=eolmarkcount*vlsize # end-of-list markers, if any
-	let vlpad=vllen/ver%2*ver
-	let tblen=tbhead+vloff+vllen+vlpad
+	lulen=$(( luhead + lumapcount * lumapsize ))
+	lupad=$(( lulen/ver % 2 *ver ))
+	stoff=$(( luoff + lulen + lupad ))
+	stlen=$(( ${#states[@]} * clcount * trsize ))
+	stpad=$(( stlen/ver % 2 *ver ))
+	etoff=$(( stoff + stlen + stpad ))
+	etlen=$(( ${#gotos[@]} * etsize ))
+	etpad=$(( etlen/ver % 2 *ver ))
+	vloff=$(( etoff + etlen + etpad ))
+	vllen=$(( ${#values[@]} * vlsize ))
+	(( vllen += eolmarkcount * vlsize )) # end-of-list markers, if any
+	vlpad=$(( vllen/ver % 2 *ver ))
+	tblen=$(( tbhead + vloff + vllen + vlpad ))
 
 	printf "\n"
 	if test $debug
@@ -789,10 +789,10 @@ do
 
 			printd "%04X %04X %04X" $etsize "$comment" $goto $flags $vlindex
 		else
-			let goto=stoff+goto*clcount # byte-offset
+			goto=$(( stoff + goto * clcount )) # byte-offset
 
 			test $action -ge 0 &&
-				let flags+=vloff+vlindices[action]*vlsize
+				(( flags += vloff + vlindices[action] * vlsize ))
 
 			printd "%04X %04X" $etsize "$comment" $goto $flags
 		fi
@@ -804,8 +804,8 @@ do
 	v=0; for i in ${!vlindices[@]}
 	do
 		nextval=${vlindices[i+1]=${#values[@]}}
-		let count=nextval-vlindices[i]
-		let len=count*vlsize
+		count=$(( nextval - vlindices[i] ))
+		len=$(( count * vlsize ))
 		test $tag = 'kerx' -a $tbfmt -eq 1 &&
 			let len+=vlsize # end-of-list value
 
@@ -824,7 +824,7 @@ do
 				if test $tag != 'kerx'
 				then
 					# Clear the least significant bit
-					let value-=value%2
+					(( value -= value % 2 ))
 
 					test $(( w + 1 )) -eq $nextval &&
 						let value+=1 # end-of-list flag
