@@ -425,15 +425,15 @@ readline
 while test "$line" = 'Type'
 do
 
-	flvert='no'
-	flcross='no'
+	flvert='no' # Kern on vertical line layout
+	flcross='no' # Kern cross-stream
 	unset tbfmt acttype # Subtable format and action type
 	states=() # State records
 	stnames=() # State names
 	gotos=() # Next states
 	gtnames=() # Names of the next states
-	flpush=() # Flags for the push action
-	fladvance=() # Flags for the advance action
+	flpush=() # Push glyph onto kern stack (mark as base in attachment type)
+	fladvance=() # Do advance to next glyph in line
 	actions=() # Kern value lists to apply
 	actnames=() # Names of kern value lists to apply
 	actlines=() # Line numbers of actions for reporting undefined values
@@ -691,8 +691,11 @@ do
 	fi
 
 	flags=0
-	test $flvert = 'yes' && let flags+=16#80
-	test $flcross = 'yes' && let flags+=16#40
+
+	test $flvert = 'yes' &&
+		(( flags |= 16#80 ))
+	test $flcross = 'yes' &&
+		(( flags |= 16#40 ))
 
 	test $tag = 'kerx' &&
 		(( flags <<= 16 )) # extended coverage field
@@ -766,8 +769,11 @@ do
 		action=${actions[i]}
 
 		flags=0
-		test ${flpush[i]} = 'yes' && let flags+=16#8000
-		test ${fladvance[i]} = 'yes' || let flags+=16#4000
+
+		test ${flpush[i]} = 'yes' &&
+			(( flags |= 16#8000 ))
+		test ${fladvance[i]} = 'yes' ||
+			(( flags |= 16#4000 ))
 
 		test $debug &&
 			comment="$(printf "%02X" $i) ${gtnames[i]}"
@@ -791,8 +797,9 @@ do
 		else
 			goto=$(( stoff + goto * clcount )) # byte-offset
 
+			# Store both flags and action offset in one word
 			test $action -ge 0 &&
-				(( flags += vloff + vlindices[action] * vlsize ))
+				(( flags |= vloff + vlindices[action] * vlsize ))
 
 			printd "%04X %04X" $etsize "$comment" $goto $flags
 		fi
@@ -823,11 +830,11 @@ do
 
 				if test $tag != 'kerx'
 				then
-					# Clear the least significant bit
-					(( value -= value % 2 ))
+					# Unset end-of-list flag for all values but the last
+					(( value &= ~1 ))
 
 					test $(( w + 1 )) -eq $nextval &&
-						let value+=1 # end-of-list flag
+						(( value |= 1 )) # end-of-list flag
 				fi
 
 				echo $value
