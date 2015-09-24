@@ -7,6 +7,40 @@ and positioning data in form of the `kerx` and `ankr` tables found
 recently in AAT, and fuses that data into a font with OS X Font Tools.
 
 
+Background
+----------
+
+If you’ve ever worked with a more recent version of Apple’s font tool
+suite, you’ve most likely noticed that among the input files used by the
+suite there’s no Kerning Input File, thus no apparent way of building
+AAT kerning data into a font.
+
+It’s not entirely clear what happened to Kerning Input File. Just ‘Mach’
+Wust, who seemed to be the first person to raise this issue publicly in
+[a message to the CoreText mailing list][2], points out a passage in the
+suite’s documentation that mentions a Kerning Input File, but with no
+further description as well as no evident support in the tools
+themselves. (See also [FontForge][3] archives and notes to the [Free
+Tengwar Font Project][4] that document Just’s findings.) It was the
+legacy version of Apple’s tools that presumably did make use of the
+file, but they are no longer available to download and they wouldn’t run
+on a modern machine anyway. The documentation has also been redacted
+since.
+
+Still, the part of font data Kerning Input File was supposed to compile
+into worked fine on all current Apple platforms and I’ve been building
+this data in hex at first. I’d keep an auxiliary text file as a notepad
+for the kerning definitions I was dealing with that would eventually
+become the input file read by the compiler — itself an ad hoc translator
+of the file into a hex code I’d otherwise write by hand.
+
+In any event, because there’s no documentation on the original file
+format, as well as no examples of its syntax left in the wild, Kerning
+Input File as defined below is just a hack: a straightforward, if not
+simplistic, approximation of the format based on Morph Input File, a
+more widespread format still used by the suite.
+
+
 Requirements
 ------------
 
@@ -34,16 +68,13 @@ anchors will be created next to your font file. If these conflict with
 your workflow in any way, please see _Troubleshooting_ below.
 
 
-The KIF file format
--------------------
+Kerning Input File
+------------------
 
-Kerning Input File, although it once [had a mention within the Font Tool
-Suite][2], it appears its format [hasn't been documented by Apple][3],
-and that there are no examples of its syntax left in the wild. What
-follows is thus a straightforward approximation of the format based on
-the Morph Input File, a related format still in use. If you've ever
-worked with MIF, the following will look familiar; if not, please see
-the relevant chapter in the OS X Font Tools documentation first.
+The following syntax is derived from the conventions found in Morph
+Input File and other input files used by Apple Font Tool Suite. If
+you've ever worked with MIF, the following will look familiar; if not,
+please see the relevant chapter in the suite's documentation first.
 
 Kerning table in AAT is a sequence of subtables with different types of
 data. Each subtable has a header with two required fields, `Type` and
@@ -207,5 +238,6 @@ BSD 3-Clause License. Please see LICENSE for details.
 
 [1]: <http://developer.apple.com/fonts/>
 [2]: <http://osdir.com/ml/coretext-dev/2010-03/msg00002.html>
-[3]: <http://freetengwar.sourceforge.net/adding_graphite_and_aat.html#kerning_input_file>
+[3]: <http://sourceforge.net/p/fontforge/mailman/fontforge-users/thread/21B4EB3F-D9DA-43D9-B3FC-703D7CC52FF9@shared-files.de/>
+[4]: <http://freetengwar.sourceforge.net/adding_graphite_and_aat.html#kerning_input_file>
 
