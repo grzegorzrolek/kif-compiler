@@ -240,7 +240,7 @@ test $tag = 'kerx' -a "$ankfile" &&
 if test -z "$post" -a "$ttf"
 then
 	post="$(dirname $ttf)/post.xml"
-	type ftxdumperfuser &>/dev/null ||
+	type ftxdumperfuser >/dev/null 2>&1 ||
 		err "could not find ftxdumperfuser"
 	ftxdumperfuser -t post -o $post $ttf
 fi
@@ -864,7 +864,7 @@ printf "</genericSFNTTable>\n"
 # Don't bother fusing if it's a dry run
 test $dry && exit
 
-type ftxdumperfuser &>/dev/null ||
+type ftxdumperfuser >/dev/null 2>&1 ||
 	err "could not find ftxdumperfuser"
 
 # Fuse assembled data files into the font
