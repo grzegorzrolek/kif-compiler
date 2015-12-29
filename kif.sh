@@ -294,7 +294,7 @@ then
 		err "class reference expected (line $lineno)"
 
 	# Read anchor data until end of file
-	loc=0; while test "$line"
+	while test "$line"
 	do
 		indexof $line ${clnames[@]}
 		test $index -eq -1 &&
@@ -303,7 +303,7 @@ then
 		test $index -ne -1 &&
 			err "class referenced twice: $line (line $lineno)"
 		clrefs+=($line)
-		ankindices+=($loc)
+		ankindices+=($(( ${#anchors[@]} / 2 )))
 
 		readline || break
 
@@ -313,8 +313,6 @@ then
 			test $(( ( ${#line[@]} - 1 ) % 2 )) -ne 0 &&
 				err "non-even number of coordinates (line $lineno)"
 			anchors+=(${line[@]})
-
-			let loc++
 
 			readline || break 2
 		done
