@@ -566,19 +566,14 @@ do
 
 		if test $tbfmt -eq 4
 		then
-			# Expect specific value count in each attachment type.
-			case $acttype in
-				1) vlnreq=1;; # point per glyph
-				2) vlnreq=1;; # anchor
-				4) vlnreq=2;; # pair of coordinates
-			esac
-
 			# Read values for both marked and current glyphs.
 			for field in Marked Current
 			do
 				test "${line[1]}" != "${field}" &&
 					err "values for $field glyph expected (line $lineno)"
-				test $(( ${#line[@]} - 2 )) -ne $vlnreq &&
+
+				# Fail if value count (per field) is not as expected
+				test $(( ${#line[@]} - 2 )) -ne $(( vlpack / 2 )) &&
 					err "wrong number of values (line $lineno)"
 
 				value=${line[@]:2}
