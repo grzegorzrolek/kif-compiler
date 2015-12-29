@@ -272,10 +272,12 @@ then
 	printd "%04X" 2 "Table version" 0
 	printd "%04X" 2 "Flags" 0
 
-	clrefs=() # Class names as referenced (vs. as defined)
-	anchors=() # Anchor coordinates
-	ankindices=() # Indices of anchors that start each new class
-	ankoffsets=() # Calculated anchor offsets
+	vlnames=() # Class names as referenced (vs. as defined)
+	values=() # Anchor coordinates
+	vlindices=() # Indices of anchors that start each new class
+	vloffsets=() # Calculated anchor offsets
+	vlsize=2 # Coordinate size in bytes
+	vlpack=2 # Number of coordinates per anchor (a pair)
 
 	line=() # last line read as list of tokens
 	lineno=0 # number of last line read
@@ -299,20 +301,20 @@ then
 		indexof $line ${clnames[@]}
 		test $index -eq -1 &&
 			err "class not found: $line (line $lineno)"
-		indexof $line ${clrefs[@]}
+		indexof $line ${vlnames[@]}
 		test $index -ne -1 &&
 			err "class referenced twice: $line (line $lineno)"
-		clrefs+=($line)
-		ankindices+=($(( ${#anchors[@]} / 2 )))
+		vlnames+=($line)
+		vlindices+=(${#values[@]})
 
 		readline || break
 
 		# Read coordinates in lines indented beneath the class reference
 		while test -z "$line"
 		do
-			test $(( ( ${#line[@]} - 1 ) % 2 )) -ne 0 &&
+			test $(( ( ${#line[@]} - 1 ) % vlpack )) -ne 0 &&
 				err "non-even number of coordinates (line $lineno)"
-			anchors+=(${line[@]})
+			values+=(${line[@]})
 
 			readline || break 2
 		done
@@ -327,7 +329,7 @@ then
 		fi
 
 		name=${clnames[luarr[i]]}
-		indexof $name ${clrefs[@]}
+		indexof $name ${vlnames[@]}
 
 		# Remove unused classes from lookup array, if any.
 		test $index -eq -1 &&
@@ -336,8 +338,8 @@ then
 		luarr[i++]=$index
 	done
 
-	# Use only the referenced class names from now on.
-	clnames=(${clrefs[@]}); unset clrefs
+	# Use the class names as referenced from now on
+	clnames=(${vlnames[@]}); unset vlnames
 
 	# Filter out ranges of glyphs with same class from the lookup array
 	lucollapse
@@ -349,34 +351,33 @@ then
 	lumapcount=$(( lusegcount + 1 ))
 	lulen=$(( luhead + lumapcount * lumapsize ))
 	lupad=$(( lulen / 2 % 2 * 2 ))
-	ankoff=$(( luoff + lulen + lupad ))
+	vloff=$(( luoff + lulen + lupad ))
 
 	printd "%08X" 4 "Anchor lookup offset" $luoff
-	printd "%08X" 4 "Anchors offset" $ankoff
+	printd "%08X" 4 "Anchors offset" $vloff
 
-	# Translate anchor indices to offsets.
+	# Translate anchor indices to their offsets
 	for i in ${!lusegs[@]}
 	do
 		s=(${lusegs[i]})
-		ankoffsets+=($(( ankindices[s[2]] * 4 + s[2] * 4 )))
+		vloffsets+=($(( vlindices[s[2]] * vlsize + s[2] * 4 )))
 	done
 
-	# Print the lookup array, but with offsets instead of indices.
-	luprint 'ankoffsets'
+	# Print the lookup array, but use the offsets instead of indices
+	luprint 'vloffsets'
 
 	pad $lupad
 
-	nanchors=$(( ${#anchors[@]} / 2 ))
 	printf "\n"
-	v=0; for i in ${!ankindices[@]}
+	v=0; for i in ${!vlindices[@]}
 	do
-		nextank=${ankindices[i+1]=$nanchors}
-		printd "%08X" 4 "${clnames[i]}" $(( nextank - v/2 ))
+		nextval=${vlindices[i+1]=${#values[@]}}
+		printd "%08X" 4 "${clnames[i]}" $(( (nextval - v) / vlpack ))
 
-		while test $(( v / 2 )) -lt $nextank
+		while test $v -lt $nextval
 		do
-			xval=${anchors[v++]}
-			yval=${anchors[v++]}
+			xval=${values[v++]}
+			yval=${values[v++]}
 
 			test $xval -lt 0 &&
 				let xval+=16#10000 # 2's complement of sorts
