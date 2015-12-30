@@ -442,6 +442,7 @@ do
 	eolmarks=() # Number of end-of-list markers prior to each list
 	eolmarkcount=0 # End-of-list marker count in total
 	vlpack=1 # Number of values per record; depends on table format
+	vlfields=() # Labelled value fields (simple value list assumed if empty)
 
 	test "$line" != 'Type' &&
 		err "kerning type expected (line $lineno)"
@@ -556,6 +557,9 @@ do
 	then readline || err "$eof (line $lineno)"
 	fi
 
+	test $tbfmt -eq 4 &&
+		vlfields=('Marked' 'Current') # fields in the attachment subtable type
+
 	# Read values until either next subtable header or end of file
 	until test "$line" = 'Type'
 	do
@@ -564,16 +568,18 @@ do
 
 		readline || break
 
-		if test $tbfmt -eq 4
+		if test ${#vlfields[@]} -gt 0
 		then
-			# Read values for both marked and current glyphs.
-			for field in Marked Current
+			# Read appropriate values for each field
+			for field in ${vlfields[@]}
 			do
-				test "${line[1]}" != "${field}" &&
-					err "values for $field glyph expected (line $lineno)"
+				label=${line[1]}
+
+				test "$label" != $field &&
+					err "unexpected value field: $label (line $lineno)"
 
 				# Fail if value count (per field) is not as expected
-				test $(( ${#line[@]} - 2 )) -ne $(( vlpack / 2 )) &&
+				test $(( ${#line[@]} - 2 )) -ne $(( vlpack / ${#vlfields[@]} )) &&
 					err "wrong number of values (line $lineno)"
 
 				value=${line[@]:2}
@@ -588,7 +594,7 @@ do
 
 				values+=($value)
 
-				readline || if test $field = 'Marked'
+				readline || if test $field != ${vlfields[(( ${#vlfields[@]} - 1 ))]}
 					then err "$eof (line $lineno)"
 					else break
 					fi
