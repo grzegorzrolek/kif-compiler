@@ -301,9 +301,11 @@ then
 		indexof $line ${clnames[@]}
 		test $index -eq -1 &&
 			err "class not found: $line (line $lineno)"
+
 		indexof $line ${vlnames[@]}
 		test $index -ne -1 &&
 			err "class referenced twice: $line (line $lineno)"
+
 		vlnames+=($line)
 		vlindices+=(${#values[@]})
 
@@ -312,9 +314,12 @@ then
 		# Read coordinates in lines indented beneath the class reference
 		while test -z "$line"
 		do
-			test $(( ( ${#line[@]} - 1 ) % vlpack )) -ne 0 &&
+			value=(${line[@]})
+
+			test $(( ${#value[@]} % vlpack )) -ne 0 &&
 				err "non-even number of coordinates (line $lineno)"
-			values+=(${line[@]})
+
+			values+=(${value[@]})
 
 			readline || break 2
 		done
@@ -578,11 +583,11 @@ do
 				test "$label" != $field &&
 					err "unexpected value field: $label (line $lineno)"
 
-				# Fail if value count (per field) is not as expected
-				test $(( ${#line[@]} - 2 )) -ne $(( vlpack / ${#vlfields[@]} )) &&
-					err "wrong number of values (line $lineno)"
-
 				value=(${line[@]:2})
+
+				# Fail if value count (per field) is not as expected
+				test ${#value[@]} -ne $(( vlpack / ${#vlfields[@]} )) &&
+					err "wrong number of values (line $lineno)"
 
 				if test $acttype -eq 1 -o $acttype -eq 2
 				then
@@ -607,14 +612,16 @@ do
 		# Read values in lines indented beneath the name
 		while test -z "$line"
 		do
+			value=(${line[@]})
+
 			# Fail on Reset value in a non-cross-stream table
 			test $flcross != 'yes' &&
-				for value in ${line[@]}
-				do test $value = 'Reset' &&
+				for val in ${value[@]}
+				do test $val = 'Reset' &&
 					err "kern reset in a non-cross-stream table (line $lineno)"
 				done
 
-			values+=(${line[@]})
+			values+=(${value[@]})
 
 			readline || break 2
 		done
