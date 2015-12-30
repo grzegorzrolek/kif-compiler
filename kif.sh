@@ -582,17 +582,17 @@ do
 				test $(( ${#line[@]} - 2 )) -ne $(( vlpack / ${#vlfields[@]} )) &&
 					err "wrong number of values (line $lineno)"
 
-				value=${line[@]:2}
+				value=(${line[@]:2})
 
 				if test $acttype -eq 1 -o $acttype -eq 2
 				then
-					test $value -le 0 &&
+					test $value -le 0 && # single value assumed
 						err "non-positive index value (line $lineno)"
 
 					let value-- # zero-based indices
 				fi
 
-				values+=($value)
+				values+=(${value[@]})
 
 				readline || if test $field != ${vlfields[(( ${#vlfields[@]} - 1 ))]}
 					then err "$eof (line $lineno)"
