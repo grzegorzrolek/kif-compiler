@@ -104,6 +104,25 @@ clread () {
 }
 
 
+# AUXILIARY PARSING FUNCTIONS
+
+# vlcheckindex: fail on a non-positive index value (e.g., anchor reference)
+vlcheckindex () {
+	for val in ${value[@]}
+	do test $val -le 0 &&
+		err "non-positive index value (line $lineno)"
+	done
+}
+
+# vlcheckreset: fail on kern reset (within a non-cross-stream table)
+vlcheckreset () {
+	for val in ${value[@]}
+	do test $val = 'Reset' &&
+		err "kern reset in a non-cross-stream table (line $lineno)"
+	done
+}
+
+
 # PROCESSING FUNCTIONS
 
 # bscalc: calculate bsearch header's $bsrange $bssel $bsshift
@@ -317,7 +336,7 @@ then
 			value=(${line[@]})
 
 			test $(( ${#value[@]} % vlpack )) -ne 0 &&
-				err "non-even number of coordinates (line $lineno)"
+				err "wrong number of values (line $lineno)"
 
 			values+=(${value[@]})
 
@@ -591,10 +610,7 @@ do
 
 				# Fail on non-positive anchor or control point indices
 				test $acttype -eq 1 -o $acttype -eq 2 &&
-					for val in ${value[@]}
-					do test $val -le 0 &&
-						err "non-positive index value (line $lineno)"
-					done
+					vlcheckindex
 
 				values+=(${value[@]})
 
@@ -615,10 +631,7 @@ do
 
 			# Fail on Reset value in a non-cross-stream table
 			test $flcross != 'yes' &&
-				for val in ${value[@]}
-				do test $val = 'Reset' &&
-					err "kern reset in a non-cross-stream table (line $lineno)"
-				done
+				vlcheckreset
 
 			values+=(${value[@]})
 
