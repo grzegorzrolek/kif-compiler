@@ -619,24 +619,20 @@ do
 					else break
 					fi
 			done
+		else
+			# Read values in lines indented beneath the name
+			while test -z "$line"
+			do
+				value=(${line[@]})
 
-			# Don't bother with other formats at this point.
-			continue
+				# Fail on kern reset in a non-cross-stream table
+				test $flcross != 'yes' &&
+					vlcheckreset
+
+				values+=(${value[@]})
+				readline || break 2
+			done
 		fi
-
-		# Read values in lines indented beneath the name
-		while test -z "$line"
-		do
-			value=(${line[@]})
-
-			# Fail on Reset value in a non-cross-stream table
-			test $flcross != 'yes' &&
-				vlcheckreset
-
-			values+=(${value[@]})
-
-			readline || break 2
-		done
 	done
 
 	# Make the anchor or control point indices zero-based
