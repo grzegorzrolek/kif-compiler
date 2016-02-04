@@ -103,6 +103,67 @@ clread () {
 	let clcount++ # target class count
 }
 
+# vlreadlist: read a list of values into $values from indented lines
+vlreadlist () {
+	for option
+	do case $option in
+		'-v') # -v checkvalue: run checkvalue on each $value list read
+			local checkvalue="$2"; shift 2;;
+		esac
+	done
+
+	while test -z "$line"
+	do
+		value=(${line[@]:1})
+
+		# Fail if values are not packed in records as expected
+		test $(( ${#value[@]} % vlpack )) -ne 0 &&
+			err "wrong number of values (line $lineno)"
+
+		test $checkvalue &&
+			$checkvalue
+
+		values+=(${value[@]})
+
+		readline || return
+	done
+}
+
+# vlreadfields: read a set of $vlfields values into $values from indented lines
+vlreadfields () {
+	for option
+	do case $option in
+		'-v') # -v checkvalue: run checkvalue on each $value list read
+			local checkvalue="$2"; shift 2;;
+		esac
+	done
+
+	# Read values in lines indented beneath the name
+	for field in ${vlfields[@]}
+	do
+		label=${line[1]}
+
+		test "$label" != $field &&
+			err "unexpected value field: $label (line $lineno)"
+
+		value=(${line[@]:2})
+
+		# Fail if value count (per field) is not as expected
+		test ${#value[@]} -ne $(( vlpack / ${#vlfields[@]} )) &&
+			err "wrong number of values (line $lineno)"
+
+		test $checkvalue &&
+			$checkvalue
+
+		values+=(${value[@]})
+
+		readline || if test $field != ${vlfields[${#vlfields[@]}-1]}
+			then err "$eof (line $lineno)"
+			else return
+			fi
+	done
+}
+
 
 # AUXILIARY PARSING FUNCTIONS
 
@@ -331,17 +392,7 @@ then
 		readline || break
 
 		# Read coordinates in lines indented beneath the class reference
-		while test -z "$line"
-		do
-			value=(${line[@]})
-
-			test $(( ${#value[@]} % vlpack )) -ne 0 &&
-				err "wrong number of values (line $lineno)"
-
-			values+=(${value[@]})
-
-			readline || break 2
-		done
+		vlreadlist || break
 	done
 
 	# Resolve class indices as defined into order of their reference
@@ -592,46 +643,20 @@ do
 
 		readline || break
 
+		unset checkfunc
 		if test ${#vlfields[@]} -gt 0
 		then
-			# Read appropriate values for each field
-			for field in ${vlfields[@]}
-			do
-				label=${line[1]}
+			# Fail on non-positive anchor or control point indices
+			test $acttype -eq 1 -o $acttype -eq 2 &&
+				checkfunc='-v vlcheckindex'
 
-				test "$label" != $field &&
-					err "unexpected value field: $label (line $lineno)"
-
-				value=(${line[@]:2})
-
-				# Fail if value count (per field) is not as expected
-				test ${#value[@]} -ne $(( vlpack / ${#vlfields[@]} )) &&
-					err "wrong number of values (line $lineno)"
-
-				# Fail on non-positive anchor or control point indices
-				test $acttype -eq 1 -o $acttype -eq 2 &&
-					vlcheckindex
-
-				values+=(${value[@]})
-
-				readline || if test $field != ${vlfields[(( ${#vlfields[@]} - 1 ))]}
-					then err "$eof (line $lineno)"
-					else break
-					fi
-			done
+			vlreadfields $checkfunc || break
 		else
-			# Read values in lines indented beneath the name
-			while test -z "$line"
-			do
-				value=(${line[@]})
+			# Fail on kern reset in a non-cross-stream table
+			test $flcross != 'yes' &&
+				checkfunc='-v vlcheckreset'
 
-				# Fail on kern reset in a non-cross-stream table
-				test $flcross != 'yes' &&
-					vlcheckreset
-
-				values+=(${value[@]})
-				readline || break 2
-			done
+			vlreadlist $checkfunc || break
 		fi
 	done
 
