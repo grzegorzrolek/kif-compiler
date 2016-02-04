@@ -589,13 +589,12 @@ do
 				test ${#value[@]} -ne $(( vlpack / ${#vlfields[@]} )) &&
 					err "wrong number of values (line $lineno)"
 
-				if test $acttype -eq 1 -o $acttype -eq 2
-				then
-					test $value -le 0 && # single value assumed
+				# Fail on non-positive anchor or control point indices
+				test $acttype -eq 1 -o $acttype -eq 2 &&
+					for val in ${value[@]}
+					do test $val -le 0 &&
 						err "non-positive index value (line $lineno)"
-
-					let value-- # zero-based indices
-				fi
+					done
 
 				values+=(${value[@]})
 
@@ -626,6 +625,14 @@ do
 			readline || break 2
 		done
 	done
+
+	# Make the anchor or control point indices zero-based
+	if test $acttype && test $acttype -eq 1 -o $acttype -eq 2
+	then
+		i=0; for val in ${values[@]}
+		do values[i++]=$(( val - 1 ))
+		done
+	fi
 
 	# Now with the values parsed match their indices to actions.
 	for i in ${!actnames[@]}
