@@ -378,15 +378,17 @@ then
 	# Read anchor data until end of file
 	while test "$line"
 	do
-		indexof $line ${clnames[@]}
+		valname=$line
+
+		indexof $valname ${clnames[@]}
 		test $index -eq -1 &&
-			err "class not found: $line (line $lineno)"
+			err "class not found: $valname (line $lineno)"
 
-		indexof $line ${vlnames[@]}
+		indexof $valname ${vlnames[@]}
 		test $index -ne -1 &&
-			err "class referenced twice: $line (line $lineno)"
+			err "class referenced twice: $valname (line $lineno)"
 
-		vlnames+=($line)
+		vlnames+=($valname)
 		vlindices+=(${#values[@]})
 
 		readline || break
@@ -638,7 +640,9 @@ do
 	# Read values until either next subtable header or end of file
 	until test "$line" = 'Type'
 	do
-		vlnames+=(${line:-${line[1]}}) # in case of indent on first name
+		valname=(${line:-${line[1]}}) # in case of indent on first name
+
+		vlnames+=($valname)
 		vlindices+=(${#values[@]})
 
 		readline || break
