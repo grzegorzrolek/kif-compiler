@@ -164,8 +164,60 @@ vlreadfields () {
 	done
 }
 
+# vlread: read values (in sets of $vlfields if any) into $vlnames and $values until end of file
+vlread () {
+	for option
+	do case "$option" in
+		'-u') # -u term: read until term line pattern instead
+			local term="$2" normline=; shift 2;;
+		'-l') # -l checkvalname: run checkvalname on each $valname read
+			local checkvalname="$2"; shift 2;;
+		'-v') # -v checkvalue: run checkvalue on each $value list read
+			local checkvalue="-v $2"; shift 2;;
+		esac
+	done
+
+	vlnames=() # Names of each value list or field set
+	vlindices=() # Indices of $values beginning each list or field set
+	values=()
+
+	# Read values until either term line pattern or an end of file
+	until test "$term" && normline="${line[*]}" && test -z "${normline//$term/}"
+	do
+		valname=${line:-${line[1]}} # in case of an indent on first name
+
+		test $checkvalname &&
+			$checkvalname
+
+		vlnames+=($valname)
+		vlindices+=(${#values[@]})
+
+		readline || return
+
+		if test ${#vlfields[@]} -gt 0
+		then
+			# Read a set of appropriate values for each field
+			vlreadfields $checkvalue || return
+		else
+			# Read a simple list of values beneath the name
+			vlreadlist $checkvalue || return
+		fi
+	done
+}
+
 
 # AUXILIARY PARSING FUNCTIONS
+
+# vlcheckankclassref: fail on problems with anchor class reference in the anchor data file
+vlcheckankclassref () {
+	indexof $valname ${clnames[@]}
+	test $index -eq -1 &&
+		err "class not found: $valname (line $lineno)"
+
+	indexof $valname ${vlnames[@]}
+	test $index -ne -1 &&
+		err "class referenced twice: $valname (line $lineno)"
+}
 
 # vlcheckindex: fail on a non-positive index value (e.g., anchor reference)
 vlcheckindex () {
@@ -352,9 +404,6 @@ then
 	printd "%04X" 2 "Table version" 0
 	printd "%04X" 2 "Flags" 0
 
-	vlnames=() # Class names as referenced (vs. as defined)
-	values=() # Anchor coordinates
-	vlindices=() # Indices of anchors that start each new class
 	vloffsets=() # Calculated anchor offsets
 	vlsize=2 # Coordinate size in bytes
 	vlpack=2 # Number of coordinates per anchor (a pair)
@@ -376,26 +425,7 @@ then
 		err "class reference expected (line $lineno)"
 
 	# Read anchor data until end of file
-	while test "$line"
-	do
-		valname=$line
-
-		indexof $valname ${clnames[@]}
-		test $index -eq -1 &&
-			err "class not found: $valname (line $lineno)"
-
-		indexof $valname ${vlnames[@]}
-		test $index -ne -1 &&
-			err "class referenced twice: $valname (line $lineno)"
-
-		vlnames+=($valname)
-		vlindices+=(${#values[@]})
-
-		readline || break
-
-		# Read coordinates in lines indented beneath the class reference
-		vlreadlist || break
-	done
+	vlread -l vlcheckankclassref
 
 	# Resolve class indices as defined into order of their reference
 	i=$lustart; while test $i -le $luend
@@ -513,9 +543,6 @@ do
 	actions=() # Kern value lists to apply
 	actnames=() # Names of kern value lists to apply
 	actlines=() # Line numbers of actions for reporting undefined values
-	values=() # Kerning values
-	vlnames=() # Names of the kern value lists
-	vlindices=() # Indexes of values beginning the lists
 	eolmarks=() # Number of end-of-list markers prior to each list
 	eolmarkcount=0 # End-of-list marker count in total
 	vlpack=1 # Number of values per record; depends on table format
@@ -634,35 +661,23 @@ do
 	then readline || err "$eof (line $lineno)"
 	fi
 
-	test $tbfmt -eq 4 &&
+	# Configure the value parser based on subtable format and action type
+	unset checkfunc
+	if test $tbfmt -eq 4
+	then
 		vlfields=('Marked' 'Current') # fields in the attachment subtable type
 
-	# Read values until either next subtable header or end of file
-	until test "$line" = 'Type'
-	do
-		valname=(${line:-${line[1]}}) # in case of indent on first name
+		# Fail on non-positive anchor or control point indices
+		test $acttype -eq 1 -o $acttype -eq 2 &&
+			checkfunc="-v vlcheckindex"
+	else
+		# Fail on kern reset in a non-cross-stream table
+		test $flcross != 'yes' &&
+			checkfunc='-v vlcheckreset'
+	fi
 
-		vlnames+=($valname)
-		vlindices+=(${#values[@]})
-
-		readline || break
-
-		unset checkfunc
-		if test ${#vlfields[@]} -gt 0
-		then
-			# Fail on non-positive anchor or control point indices
-			test $acttype -eq 1 -o $acttype -eq 2 &&
-				checkfunc='-v vlcheckindex'
-
-			vlreadfields $checkfunc || break
-		else
-			# Fail on kern reset in a non-cross-stream table
-			test $flcross != 'yes' &&
-				checkfunc='-v vlcheckreset'
-
-			vlreadlist $checkfunc || break
-		fi
-	done
+	# Read values until either next subtable header or an end of file
+	vlread -u 'Type[ 	]*' $checkfunc
 
 	# Make the anchor or control point indices zero-based
 	if test $acttype && test $acttype -eq 1 -o $acttype -eq 2
