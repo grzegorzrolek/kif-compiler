@@ -595,20 +595,32 @@ do
 	do
 		stnames+=($line)
 
-		state=()
-		for entry in ${line[@]:1}
-		do
-			test $entry -le 0 &&
-				err "non-positive entry number (line $lineno)"
+		state=(${line[@]:1})
 
-			state+=($(( --entry ))) # zero-based indices
+		# Fail on a non-positive state table entry
+		for entry in ${state[@]}
+		do test $entry -le 0 &&
+			err "non-positive state table entry (line $lineno)"
 		done
 
 		test "${#state[@]}" -ne "$clcount" &&
 			err "wrong entry count in state: $line (line $lineno)"
+
 		states+=("${state[*]}")
 
 		readline -b || err "$eof (line $lineno)"
+	done
+
+	# Make the state table entries zero-based
+	for i in ${!states[@]}
+	do
+		state=(${states[i]})
+
+		j=0; for entry in ${state[@]}
+		do state[j++]=$(( entry - 1 ))
+		done
+
+		states[i]="${state[*]}"
 	done
 
 	# Skip additional blank lines if necessary
