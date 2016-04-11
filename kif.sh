@@ -38,7 +38,7 @@ readline () {
 	test "$1" = '-b' && # -b: don't skip blank lines
 		local blank='yes'
 
-	unset line
+	unset line # last line read
 
 	read || return; let lineno++
 
@@ -408,7 +408,6 @@ then
 	vlsize=2 # Coordinate size in bytes
 	vlpack=2 # Number of coordinates per anchor (a pair)
 
-	line=() # last line read as list of tokens
 	lineno=0 # number of last line read
 
 	# Read first line
@@ -521,7 +520,6 @@ trsize=$ver # transition entry size
 etsize=$(( 2 + 2*ver )) # full entry size
 vlsize=2 # value size
 
-line=() # last line read as list of tokens
 lineno=0 # number of last line read
 
 # Read first line of input
