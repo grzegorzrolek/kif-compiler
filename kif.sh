@@ -208,6 +208,17 @@ vlread () {
 
 # AUXILIARY PARSING FUNCTIONS
 
+# stcheckstate: fail on a non-positive state table entry or wrong state length
+stcheckstate () {
+	for entry in ${state[@]}
+	do test $entry -le 0 &&
+		err "non-positive state table entry (line $lineno)"
+	done
+
+	test "${#state[@]}" -ne "$clcount" &&
+		err "wrong number of entries in state: $stname (line $lineno)"
+}
+
 # vlcheckankclassref: fail on problems with anchor class reference in the anchor data file
 vlcheckankclassref () {
 	indexof $valname ${clnames[@]}
@@ -593,18 +604,13 @@ do
 	# Read the state table until either a blank line or an indented one
 	until test -z "${line[*]}" -o -z "$line"
 	do
-		stnames+=($line)
+		stname=$line
+		stnames+=($stname)
 
 		state=(${line[@]:1})
 
 		# Fail on a non-positive state table entry
-		for entry in ${state[@]}
-		do test $entry -le 0 &&
-			err "non-positive state table entry (line $lineno)"
-		done
-
-		test "${#state[@]}" -ne "$clcount" &&
-			err "wrong entry count in state: $line (line $lineno)"
+		stcheckstate
 
 		states+=("${state[*]}")
 
