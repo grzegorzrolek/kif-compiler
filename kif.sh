@@ -103,6 +103,35 @@ clread () {
 	let clcount++ # target class count
 }
 
+# stread: read state table into $stnames and $states until either blank or indented line
+stread () {
+	for option
+	do case "$option" in
+		'-s') # -s checkstate: run checkstate on each $state list read
+			local checkstate="$2"; shift 2;;
+		esac
+	done
+
+	stnames=() # State names
+	states=() # State-long strings of entries
+
+	# Read the state table until either blank or indented line
+	until test -z "${line[*]}" -o -z "$line"
+	do
+		stname=$line
+		stnames+=($stname)
+
+		state=(${line[@]:1})
+
+		test $checkstate &&
+			$checkstate
+
+		states+=("${state[*]}")
+
+		readline -b || return
+	done
+}
+
 # vlreadlist: read a list of values into $values from indented lines
 vlreadlist () {
 	for option
@@ -543,8 +572,6 @@ do
 	flvert='no' # Kern on vertical line layout
 	flcross='no' # Kern cross-stream
 	unset tbfmt acttype # Subtable format and action type
-	states=() # State records
-	stnames=() # State names
 	gotos=() # Next states
 	gtnames=() # Names of the next states
 	flpush=() # Push glyph onto kern stack (mark as base in attachment type)
@@ -598,24 +625,11 @@ do
 	test "${clnames[*]}" != "${line[*]:1}" &&
 		err "classes and state header don't match (line $lineno)"
 
-	# Read the first state, skipping any blank lines directly beneath the header
+	# Skip any blank lines directly beneath the state table header
 	readline || err "$eof (line $lineno)"
 
-	# Read the state table until either a blank line or an indented one
-	until test -z "${line[*]}" -o -z "$line"
-	do
-		stname=$line
-		stnames+=($stname)
-
-		state=(${line[@]:1})
-
-		# Fail on a non-positive state table entry
-		stcheckstate
-
-		states+=("${state[*]}")
-
-		readline -b || err "$eof (line $lineno)"
-	done
+	# Read the state table until either blank or indented line
+	stread -s stcheckstate || err "$eof (line $lineno)"
 
 	# Make the state table entries zero-based
 	for i in ${!states[@]}
