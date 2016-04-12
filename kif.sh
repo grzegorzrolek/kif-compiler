@@ -132,6 +132,50 @@ stread () {
 	done
 }
 
+# etread: read transition entries into $gtnames, $flpush and $fladvance flags, and $actnames
+etread () {
+	for option
+	do case $option in
+		'-g') # -g checkgoto: run checkgoto on each $gtname read
+			local checkgoto="$2"; shift 2;;
+		'-a') # -a checkaction: run checkaction on each $actname read
+			local checkaction="$2"; shift 2;;
+		esac
+	done
+
+	gtnames=() # The goto state references
+	flpush=() # Push glyph onto the kern stack flags (mark as base in attachment type)
+	fladvance=() # Do advance to the next glyph in line flags
+	actnames=() # Names of kern value lists to apply (anchor pairs to match, etc.)
+
+	# Read entries until a blank line, or an indented one (the Font Tools way)
+	until test -z "${line[*]}" -o -z "$line"
+	do
+		entry=$(( ${#gtnames[@]} + 1 ))
+		test $line -eq $entry ||
+			err "non-sequential transition entry number: $line (line $lineno)"
+
+		gtname=${line[@]:1:1}
+
+		test $checkgoto &&
+			$checkgoto
+
+		gtnames+=($gtname)
+
+		flpush+=(${line[@]:2:1})
+		fladvance+=(${line[@]:3:1})
+
+		actname=${line[@]:4:1}
+
+		test $checkaction &&
+			$checkaction
+
+		actnames+=($actname)
+
+		readline -b || return
+	done
+}
+
 # vlreadlist: read a list of values into $values from indented lines
 vlreadlist () {
 	for option
@@ -584,13 +628,9 @@ do
 	flvert='no' # Kern on vertical line layout
 	flcross='no' # Kern cross-stream
 	unset tbfmt acttype # Subtable format and action type
-	gotos=() # Next states
-	gtnames=() # Names of the next states
-	flpush=() # Push glyph onto kern stack (mark as base in attachment type)
-	fladvance=() # Do advance to next glyph in line
-	actions=() # Kern value lists to apply
-	actnames=() # Names of kern value lists to apply
-	actlines=() # Line numbers of actions for reporting undefined values
+	gotos=() # The goto state indices
+	actions=() # Kern value lists indices to apply (anchor pairs to match, etc.)
+	actlines=() # Line numbers of action names for the undefined value reports
 	eolmarks=() # Number of end-of-list markers prior to each list
 	eolmarkcount=0 # End-of-list marker count in total
 	vlpack=1 # Number of values per record; depends on table format
@@ -674,35 +714,11 @@ do
 			err "malformed entry table header (line $lineno)"
 	fi
 
-	# Read the first entry, skipping blank lines beneath the header
+	# Skip blank lines beneath the entry table header
 	readline || err "$eof (line $lineno)"
 
 	# Read entries until a blank line, or an indented one (the Font Tools way)
-	until test -z "${line[*]}" -o -z "$line"
-	do
-		entry=$(( ${#gtnames[@]} + 1 ))
-		test $line -eq $entry ||
-			err "non-sequential entry number: $line (line $lineno)"
-
-		gtname=${line[@]:1:1}
-
-		# Fail on an unknown goto reference
-		etcheckgoto
-
-		gtnames+=($gtname)
-
-		flpush+=(${line[@]:2:1})
-		fladvance+=(${line[@]:3:1})
-
-		actname=${line[@]:4:1}
-
-		# Keep line numbers of action names for error reporting
-		etkeeplineno
-
-		actnames+=($actname)
-
-		readline -b || err "$eof (line $lineno)"
-	done
+	etread -g etcheckgoto -a etkeeplineno || err "$eof (line $lineno)"
 
         # Convert goto references into state indices
         for gtname in ${gtnames[@]}
