@@ -248,6 +248,18 @@ stcheckstate () {
 		err "wrong number of entries in state: $stname (line $lineno)"
 }
 
+# etcheckgoto: fail on an unknown goto reference in the entry table
+etcheckgoto () {
+	indexof $gtname ${stnames[@]}
+	test $index -eq -1 &&
+		err "state not found: $gtname (line $lineno)"
+}
+
+# etkeeplineno: keep line numbers of action names for the undefined value reports
+etkeeplineno () {
+	actlines+=($lineno)
+}
+
 # vlcheckankclassref: fail on problems with anchor class reference in the anchor data file
 vlcheckankclassref () {
 	indexof $valname ${clnames[@]}
@@ -674,16 +686,20 @@ do
 
 		gtname=${line[@]:1:1}
 
-		indexof $gtname ${stnames[@]}
-		test $index -eq -1 &&
-			err "state not found: $gtname (line $lineno)"
+		# Fail on an unknown goto reference
+		etcheckgoto
 
 		gtnames+=($gtname)
 
 		flpush+=(${line[@]:2:1})
 		fladvance+=(${line[@]:3:1})
-		actnames+=(${line[@]:4:1})
-		actlines+=($lineno)
+
+		actname=${line[@]:4:1}
+
+		# Keep line numbers of action names for error reporting
+		etkeeplineno
+
+		actnames+=($actname)
 
 		readline -b || err "$eof (line $lineno)"
 	done
