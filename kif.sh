@@ -668,16 +668,17 @@ do
 	# Read entries until a blank line, or an indented one (the Font Tools way)
 	until test -z "${line[*]}" -o -z "$line"
 	do
-		entry=$(( ${#gotos[@]} + 1 ))
+		entry=$(( ${#gtnames[@]} + 1 ))
 		test $line -eq $entry ||
 			err "non-sequential entry number: $line (line $lineno)"
 
-		stname=${line[@]:1:1}
-		indexof $stname ${stnames[@]}
+		gtname=${line[@]:1:1}
+
+		indexof $gtname ${stnames[@]}
 		test $index -eq -1 &&
-			err "state not found: $stname (line $lineno)"
-		gotos+=($index)
-		gtnames+=($stname)
+			err "state not found: $gtname (line $lineno)"
+
+		gtnames+=($gtname)
 
 		flpush+=(${line[@]:2:1})
 		fladvance+=(${line[@]:3:1})
@@ -685,6 +686,13 @@ do
 		actlines+=($lineno)
 
 		readline -b || err "$eof (line $lineno)"
+	done
+
+        # Convert goto references into state indices
+        for gtname in ${gtnames[@]}
+        do
+                indexof $gtname ${stnames[@]}
+                gotos+=($index)
 	done
 
 	if test -z "${line[*]}"
